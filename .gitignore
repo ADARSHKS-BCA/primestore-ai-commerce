@@ -1,6 +1,6 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# =======================================================
+# Dependencies
+# =======================================================
 /node_modules
 /.pnp
 .pnp.*
@@ -10,32 +10,88 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
+# =======================================================
+# Environment & Confidential Secrets (CRITICAL)
+# =======================================================
+.env
+.env*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+*.env.json
 
-# next.js
+# =======================================================
+# Firebase & Cloud Service Accounts (CRITICAL)
+# =======================================================
+service-account*.json
+*firebase-adminsdk*.json
+*-adminsdk-*.json
+*.credentials.json
+credentials.json
+client_secret*.json
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# =======================================================
+# SSL, Private Keys & Certificates
+# =======================================================
+*.pem
+*.key
+*.pfx
+*.p12
+*.cer
+*.crt
+*.der
+*.keystore
+id_rsa*
+id_ed25519*
+secrets/
+*.secret
+
+# =======================================================
+# Next.js, Build & Output
+# =======================================================
 /.next/
 /out/
-
-# production
 /build
+/dist
+/coverage
+.vercel
 
-# misc
-.DS_Store
-*.pem
-
-# debug
+# =======================================================
+# Logs & Diagnostics
+# =======================================================
+logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
+# =======================================================
+# TypeScript & Cache
+# =======================================================
 *.tsbuildinfo
 next-env.d.ts
+
+# =======================================================
+# OS & Editor Files
+# =======================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
