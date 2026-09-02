@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       response: result.response,
       cart: result.cart,
+      categoryFilter: (result as { categoryFilter?: string | null }).categoryFilter || null,
       history: result.history,
     });
   } catch (error) {

@@ -27,10 +27,22 @@ To learn more about Next.js, take a look at the following resources:
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Catalog Image Enrichment & Deduplication Service
 
-## Deploy on Vercel
+To ensure every product in the catalog displays a distinct, high-definition photo matching its category and brand:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. **Configure API Keys (Optional)** in `.env.local`:
+   - `PEXELS_API_KEY`: Free signup at [Pexels API](https://www.pexels.com/api/) (Tier 1 Primary).
+   - `PIXABAY_API_KEY`: Free signup at [Pixabay API](https://pixabay.com/api/docs/) (Tier 2 Fallback).
+   - If keys are omitted, the service deterministically falls back to unique seeded placeholders (`https://picsum.photos/seed/{product_id}/600/400`).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. **Run Enrichment**:
+   ```bash
+   npx tsx scripts/enrichCatalogImages.ts
+   ```
+
+3. **Seed Cloud Firestore**:
+   ```bash
+   npx tsx scripts/seedProducts.ts
+   ```
+

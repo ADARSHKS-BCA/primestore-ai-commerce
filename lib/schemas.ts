@@ -41,6 +41,7 @@ export interface Order {
   status: 'created' | 'paid' | 'failed';
   createdAt: Timestamp | Date;
   userId?: string;
+  deliveryAddress?: string;
 }
 
 // --- Audit Logs ---
@@ -65,3 +66,31 @@ export interface ChatMessage {
   content: string;
   cart?: Cart;
 }
+
+// --- Voice Session Logs ---
+export interface VoiceSessionLog {
+  id: string;
+  userId: string | null;
+  userName: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  transcript: Array<{
+    role: 'user' | 'bot';
+    text: string;
+    timestamp: string;
+    intent?: string;
+    slots?: Record<string, unknown>;
+    state?: string;
+    reasoning?: string;
+  }>;
+  outcome: 'order_placed' | 'abandoned' | 'payment_failed' | 'error';
+  orderId: string | null;
+  razorpayOrderId?: string | null;
+  razorpayPaymentId?: string | null;
+  statesVisited: string[];
+  upsellOffered?: boolean;
+  upsellAccepted?: boolean;
+  upsellItem?: { name: string; displayPrice: number } | null;
+  orderTotalDisplay?: number | null;
+}
+

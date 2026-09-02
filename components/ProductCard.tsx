@@ -1,132 +1,113 @@
 'use client';
 
-import React from 'react';
+import { useState } from 'react';
 import { CatalogProduct } from '@/lib/productsData';
 
 interface ProductCardProps {
   product: CatalogProduct;
-  onAskAiToOrder: (product: CatalogProduct) => void;
-  onAddToCart: (product: CatalogProduct) => void;
+  onAddToCart?: (product: CatalogProduct) => void;
+  onOpenAssistantForProduct?: (product: CatalogProduct) => void;
+  isHighlighted?: boolean;
 }
 
 export default function ProductCard({
   product,
-  onAskAiToOrder,
   onAddToCart,
+  isHighlighted,
 }: ProductCardProps) {
-  // Render star ratings
-  const renderStars = (rating: number) => {
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 >= 0.5;
-    const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+  const [added, setAdded] = useState(false);
 
-    return (
-      <div className="product-stars" title={`${rating} out of 5 stars`}>
-        <span className="stars-filled">{'★'.repeat(fullStars)}</span>
-        {hasHalfStar && <span className="star-half">★</span>}
-        <span className="stars-empty">{'☆'.repeat(emptyStars)}</span>
-        <span className="rating-number">{rating.toFixed(1)}</span>
-        <span className="review-count">({product.reviewCount.toLocaleString('en-IN')})</span>
-      </div>
-    );
+  const handleAdd = () => {
+    setAdded(true);
+    onAddToCart?.(product);
+    setTimeout(() => setAdded(false), 1800);
   };
 
   return (
-    <div className="amazon-product-card">
-      {/* Top Badges */}
-      <div className="product-badge-row">
-        {product.badge && (
-          <span
-            className={`product-badge ${
-              product.badge === 'Best Seller'
-                ? 'badge-bestseller'
-                : product.badge === "Amazon's Choice"
-                ? 'badge-choice'
-                : 'badge-deal'
-            }`}
-          >
-            {product.badge}
-          </span>
-        )}
-        {product.discountPercent > 0 && (
-          <span className="discount-tag">-{product.discountPercent}% OFF</span>
-        )}
-      </div>
-
-      {/* Product Image */}
-      <div className="product-image-container">
+    <div
+      className="product-card"
+      style={isHighlighted ? {
+        border: '2px solid var(--accent-cyan)',
+        boxShadow: '0 0 20px rgba(6, 182, 212, 0.35), var(--shadow-lg)',
+        transform: 'scale(1.02)',
+        transition: 'all 0.3s ease',
+        position: 'relative',
+      } : undefined}
+    >
+      {/* Voice Selected Badge */}
+      {isHighlighted && (
+        <div style={{
+          position: 'absolute',
+          top: '8px',
+          left: '8px',
+          zIndex: 10,
+          padding: '3px 8px',
+          borderRadius: '9999px',
+          fontSize: '0.65rem',
+          fontWeight: 800,
+          background: 'var(--accent-cyan)',
+          color: '#000',
+          animation: 'pulse-glow 2s infinite',
+        }}>
+          🎙️ Voice Selected
+        </div>
+      )}
+      {/* Product Image & Badges */}
+      <div className="card-image-box">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={product.imageUrl}
           alt={product.name}
-          className="product-image"
+          className="card-img"
           loading="lazy"
         />
+
+        {product.badge && (
+          <span className="badge-overlay">{product.badge}</span>
+        )}
+
+        {product.discountPercent > 0 && (
+          <span className="discount-badge">-{product.discountPercent}%</span>
+        )}
       </div>
 
-      {/* Product Information */}
-      <div className="product-info">
-        <span className="product-category-label">{product.category}</span>
-        <h3 className="product-title" title={product.name}>
+      {/* Card Body */}
+      <div className="card-body">
+        <div className="card-brand">{product.brand} • {product.category}</div>
+        <h3 className="card-name" title={product.name}>
           {product.name}
         </h3>
 
-        {/* Rating */}
-        {renderStars(product.rating)}
+        {/* Rating & Reviews */}
+        <div className="card-rating-row">
+          <span className="stars">★ {product.rating}</span>
+          <span className="review-count">({product.reviewsCount.toLocaleString('en-IN')})</span>
+        </div>
 
-        {/* Key Features */}
-        <ul className="product-features-list">
-          {product.features.slice(0, 2).map((feat, idx) => (
-            <li key={idx}>✓ {feat}</li>
+        {/* Feature Specs */}
+        <div className="card-specs">
+          {product.specs.slice(0, 3).map((spec, i) => (
+            <span key={i} className="spec-chip">
+              ✓ {spec}
+            </span>
           ))}
-        </ul>
+        </div>
 
         {/* Price Row */}
-        <div className="product-price-row">
-          <span className="currency-symbol">₹</span>
-          <span className="price-main">{product.displayPrice.toLocaleString('en-IN')}</span>
+        <div className="card-price-row">
+          <span className="current-price">₹{product.displayPrice.toLocaleString('en-IN')}</span>
           {product.originalPrice > product.displayPrice && (
-            <span className="price-original">
-              M.R.P: <s>₹{product.originalPrice.toLocaleString('en-IN')}</s>
-            </span>
+            <span className="original-price">₹{product.originalPrice.toLocaleString('en-IN')}</span>
           )}
         </div>
 
-        {/* Prime & Delivery */}
-        {product.primeEligible && (
-          <div className="product-prime-row">
-            <span className="prime-badge">prime</span>
-            <span className="delivery-time">FREE One-Day Delivery</span>
-          </div>
-        )}
-
-        <div className="stock-status">
-          {product.inStock ? (
-            <span className="in-stock-text">✓ In Stock</span>
-          ) : (
-            <span className="out-stock-text">Currently Unavailable</span>
-          )}
-        </div>
-
-        {/* Card Actions */}
-        <div className="product-card-actions">
-          <button
-            onClick={() => onAskAiToOrder(product)}
-            className="btn-ask-ai"
-            title="Tell AI assistant to order this item"
-          >
-            <span className="btn-ai-icon">🤖</span>
-            <span>Ask AI to Order</span>
-          </button>
-
-          <button
-            onClick={() => onAddToCart(product)}
-            className="btn-add-cart"
-            title="Add item to your cart"
-          >
-            🛒 Add to Cart
-          </button>
-        </div>
+        {/* Action Button: Single Clean Add to Cart */}
+        <button
+          onClick={handleAdd}
+          className="btn-add-cart"
+        >
+          {added ? '✓ Added to Cart!' : '🛒 Add to Cart'}
+        </button>
       </div>
     </div>
   );

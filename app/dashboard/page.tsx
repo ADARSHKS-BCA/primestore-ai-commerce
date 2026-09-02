@@ -1,5 +1,6 @@
 import AuditLogTable from '@/components/AuditLogTable';
 import ApprovalQueue from '@/components/ApprovalQueue';
+import VoiceSessionTable from '@/components/VoiceSessionTable';
 
 export default function DashboardPage() {
   return (
@@ -13,6 +14,12 @@ export default function DashboardPage() {
         <ApprovalQueue />
         <AuditLogTable />
       </div>
+
+      {/* Voice Session Audit Trail */}
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1.5rem 2rem' }}>
+        <VoiceSessionTable />
+      </div>
     </div>
   );
 }
+

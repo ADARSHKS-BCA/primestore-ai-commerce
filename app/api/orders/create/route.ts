@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { cartId } = body;
+    const { cartId, userId, deliveryAddress } = body;
 
     if (!cartId || typeof cartId !== 'string') {
       return NextResponse.json({ error: 'cartId is required' }, { status: 400 });
@@ -83,7 +83,8 @@ export async function POST(request: Request) {
       currency: CURRENCY,
       status: 'created' as const,
       createdAt: new Date(),
-      userId: null,
+      userId: userId || undefined,
+      deliveryAddress: deliveryAddress || undefined,
     };
 
     await Promise.all([
@@ -101,8 +102,10 @@ export async function POST(request: Request) {
           orderId: order.id,
           razorpayOrderId: razorpayOrder.id,
           amount: recalculatedTotalPaise / 100,
+          deliveryAddress: deliveryAddress || null,
         },
         status: 'approved',
+        userId: userId || undefined,
         relatedCartId: cartId,
         relatedOrderId: order.id,
       }),

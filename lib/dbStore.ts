@@ -55,11 +55,13 @@ export async function getProductsList(): Promise<CatalogProduct[]> {
         const dbProducts = snapshot.docs.map((doc) => doc.data() as Product);
         cachedProducts = PRODUCTS_CATALOG.map((catItem) => {
           const found = dbProducts.find((p) => p.id === catItem.id);
-          return found ? { ...catItem, ...found } : catItem;
+          return found
+            ? ({ ...catItem, ...found, category: catItem.category } as CatalogProduct)
+            : catItem;
         });
         productsCacheTime = now;
         console.log(`⏱️ [TIMING: DB_PRODUCTS] Cloud Firestore read completed in ${(performance.now() - t0).toFixed(1)}ms`);
-        return cachedProducts;
+        return cachedProducts || PRODUCTS_CATALOG;
       }
     } catch (err) {
       console.warn('⚠️ [DB_PRODUCTS] Cloud fetch timed out, serving fast catalog fallback');

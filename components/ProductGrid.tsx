@@ -1,160 +1,202 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import ProductCard from './ProductCard';
 import { CatalogProduct } from '@/lib/productsData';
 
 interface ProductGridProps {
   products: CatalogProduct[];
   selectedCategory: string;
-  onCategorySelect: (category: string) => void;
   searchQuery: string;
-  onAskAiToOrder: (product: CatalogProduct) => void;
-  onAddToCart: (product: CatalogProduct) => void;
+  selectedPriceBand?: 'all' | 'budget' | 'mid' | 'premium';
+  onPriceBandChange?: (band: 'all' | 'budget' | 'mid' | 'premium') => void;
+  onAddToCart?: (product: CatalogProduct) => void;
+  onOpenAssistantForProduct?: (product: CatalogProduct) => void;
+  highlightedProductId?: string | null;
 }
 
 export default function ProductGrid({
   products,
   selectedCategory,
-  onCategorySelect,
   searchQuery,
-  onAskAiToOrder,
+  selectedPriceBand: controlledPriceBand,
+  onPriceBandChange,
   onAddToCart,
+  onOpenAssistantForProduct,
+  highlightedProductId,
 }: ProductGridProps) {
-  const [sortBy, setSortBy] = useState<'featured' | 'price-low' | 'price-high' | 'rating'>('featured');
-  const [priceFilter, setPriceFilter] = useState<'all' | 'under2k' | '2k-4k' | 'above4k'>('all');
+  const [selectedBrand, setSelectedBrand] = useState('All');
+  const [internalPriceBand, setInternalPriceBand] = useState<'all' | 'budget' | 'mid' | 'premium'>('all');
+  const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'rating' | 'discount'>('featured');
 
-  const categories = [
-    'All Categories',
-    'Audio',
-    'Peripherals',
-    'Wearables',
-    'Storage',
-    'Gaming',
-    'Accessories',
-  ];
+  const activePriceBand = controlledPriceBand !== undefined ? controlledPriceBand : internalPriceBand;
 
-  // Filter and sort products
+  const handlePriceBandClick = (band: 'all' | 'budget' | 'mid' | 'premium') => {
+    setInternalPriceBand(band);
+    onPriceBandChange?.(band);
+  };
+
+  // Extract distinct brands from products
+  const availableBrands = useMemo(() => {
+    const brands = new Set<string>();
+    products.forEach((p) => {
+      if (selectedCategory === 'All Categories' || p.category === selectedCategory) {
+        brands.add(p.brand);
+      }
+    });
+    return ['All', ...Array.from(brands).sort()];
+  }, [products, selectedCategory]);
+
+  // Filter and Sort Products
   const filteredProducts = useMemo(() => {
     return products
       .filter((product) => {
-        // Category filter
+        // Category Filter
         if (selectedCategory !== 'All Categories' && product.category !== selectedCategory) {
           return false;
         }
 
-        // Search query filter
+        // Brand Filter
+        if (selectedBrand !== 'All' && product.brand !== selectedBrand) {
+          return false;
+        }
+
+        // Price Band Filter
+        if (activePriceBand === 'budget' && product.displayPrice > 2000) return false;
+        if (activePriceBand === 'mid' && (product.displayPrice < 2000 || product.displayPrice > 8000)) return false;
+        if (activePriceBand === 'premium' && product.displayPrice < 8000) return false;
+
+        // Search Query
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           const matchName = product.name.toLowerCase().includes(q);
+          const matchBrand = product.brand.toLowerCase().includes(q);
           const matchDesc = product.description.toLowerCase().includes(q);
           const matchCategory = product.category.toLowerCase().includes(q);
-          if (!matchName && !matchDesc && !matchCategory) {
-            return false;
-          }
+          return matchName || matchBrand || matchDesc || matchCategory;
         }
-
-        // Price filter
-        if (priceFilter === 'under2k' && product.displayPrice >= 2000) return false;
-        if (priceFilter === '2k-4k' && (product.displayPrice < 2000 || product.displayPrice > 4000)) return false;
-        if (priceFilter === 'above4k' && product.displayPrice <= 4000) return false;
 
         return true;
       })
       .sort((a, b) => {
-        if (sortBy === 'price-low') return a.displayPrice - b.displayPrice;
-        if (sortBy === 'price-high') return b.displayPrice - a.displayPrice;
+        if (sortBy === 'price-asc') return a.displayPrice - b.displayPrice;
+        if (sortBy === 'price-desc') return b.displayPrice - a.displayPrice;
         if (sortBy === 'rating') return b.rating - a.rating;
-        return 0; // featured default
+        if (sortBy === 'discount') return b.discountPercent - a.discountPercent;
+        return 0;
       });
-  }, [products, selectedCategory, searchQuery, priceFilter, sortBy]);
+  }, [products, selectedCategory, selectedBrand, activePriceBand, searchQuery, sortBy]);
 
   return (
-    <section className="product-catalog-section">
-      {/* Catalog Controls Strip */}
-      <div className="catalog-header-bar">
-        <div className="catalog-title-wrap">
-          <h2 className="catalog-heading">
-            {selectedCategory === 'All Categories' ? 'Featured Tech & Electronics' : selectedCategory}
+    <section className="storefront-main">
+      {/* Header & Product Count */}
+      <div className="catalog-header">
+        <div className="catalog-title-box">
+          <h2>
+            {selectedCategory === 'All Categories' ? 'Explore All Products' : `${selectedCategory} Collection`}
           </h2>
-          <span className="results-count">
-            Showing {filteredProducts.length} of {products.length} products
-          </span>
-        </div>
-
-        {/* Filter & Sort Controls */}
-        <div className="catalog-filters">
-          {/* Price Range Filter */}
-          <div className="filter-group">
-            <label htmlFor="priceFilterSelect">Price:</label>
-            <select
-              id="priceFilterSelect"
-              value={priceFilter}
-              onChange={(e) => setPriceFilter(e.target.value as typeof priceFilter)}
-              className="filter-select"
-            >
-              <option value="all">All Prices</option>
-              <option value="under2k">Under ₹2,000</option>
-              <option value="2k-4k">₹2,000 - ₹4,000</option>
-              <option value="above4k">Above ₹4,000</option>
-            </select>
-          </div>
-
-          {/* Sort Dropdown */}
-          <div className="filter-group">
-            <label htmlFor="sortBySelect">Sort by:</label>
-            <select
-              id="sortBySelect"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="filter-select"
-            >
-              <option value="featured">Featured</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-              <option value="rating">Avg. Customer Review</option>
-            </select>
-          </div>
+          <p>
+            Showing <strong>{filteredProducts.length}</strong> items from top global brands
+          </p>
         </div>
       </div>
 
-      {/* Category Pills Bar */}
-      <div className="category-pills-bar">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => onCategorySelect(cat)}
-            className={`category-pill ${selectedCategory === cat ? 'active' : ''}`}
+      {/* Filter & Sort Toolbar */}
+      <div className="catalog-toolbar">
+        {/* Brand Filter */}
+        <div className="filter-group">
+          <span className="filter-label">Brand:</span>
+          <select
+            value={selectedBrand}
+            onChange={(e) => setSelectedBrand(e.target.value)}
+            className="filter-select"
+            aria-label="Filter by brand"
           >
-            {cat}
-          </button>
-        ))}
+            {availableBrands.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Price Band Pills */}
+        <div className="filter-group">
+          <span className="filter-label">Price Range:</span>
+          <div className="filter-pills">
+            <button
+              onClick={() => handlePriceBandClick('all')}
+              className={`price-pill ${activePriceBand === 'all' ? 'active' : ''}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => handlePriceBandClick('budget')}
+              className={`price-pill ${activePriceBand === 'budget' ? 'active' : ''}`}
+            >
+              Budget (&lt; ₹2k)
+            </button>
+            <button
+              onClick={() => handlePriceBandClick('mid')}
+              className={`price-pill ${activePriceBand === 'mid' ? 'active' : ''}`}
+            >
+              Mid (₹2k – ₹8k)
+            </button>
+            <button
+              onClick={() => handlePriceBandClick('premium')}
+              className={`price-pill ${activePriceBand === 'premium' ? 'active' : ''}`}
+            >
+              Premium (&gt; ₹8k)
+            </button>
+          </div>
+        </div>
+
+        {/* Sort By Dropdown */}
+        <div className="filter-group" style={{ marginLeft: 'auto' }}>
+          <span className="filter-label">Sort:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="filter-select"
+            aria-label="Sort products"
+          >
+            <option value="featured">Featured Deals</option>
+            <option value="price-asc">Price: Low to High</option>
+            <option value="price-desc">Price: High to Low</option>
+            <option value="rating">Highest Rated</option>
+            <option value="discount">Biggest Discounts</option>
+          </select>
+        </div>
       </div>
 
       {/* Product Cards Grid */}
       {filteredProducts.length === 0 ? (
-        <div className="empty-catalog-state">
-          <div className="empty-icon">🔍</div>
-          <h3>No products match your criteria</h3>
-          <p>Try clearing filters or searching for something else.</p>
+        <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔍</div>
+          <h3>No products match your filters</h3>
+          <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+            Try resetting your price range or brand filter to see more items.
+          </p>
           <button
             onClick={() => {
-              onCategorySelect('All Categories');
-              setPriceFilter('all');
+              setSelectedBrand('All');
+              handlePriceBandClick('all');
             }}
-            className="btn-reset-filters"
+            className="price-pill"
+            style={{ marginTop: '1.25rem', padding: '0.5rem 1.25rem', background: 'var(--accent-primary)', color: '#fff' }}
           >
             Reset Filters
           </button>
         </div>
       ) : (
-        <div className="amazon-product-grid">
+        <div className="products-grid">
           {filteredProducts.map((product) => (
             <ProductCard
               key={product.id}
               product={product}
-              onAskAiToOrder={onAskAiToOrder}
               onAddToCart={onAddToCart}
+              onOpenAssistantForProduct={onOpenAssistantForProduct}
+              isHighlighted={highlightedProductId === product.id}
             />
           ))}
         </div>

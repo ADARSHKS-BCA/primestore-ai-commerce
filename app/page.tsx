@@ -1,22 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import AmazonNavbar from '@/components/AmazonNavbar';
-import HeroBanner from '@/components/HeroBanner';
+import { useState, useEffect, useCallback } from 'react';
+import Navbar from '@/components/Navbar';
+import HeroShowcase from '@/components/HeroShowcase';
 import ProductGrid from '@/components/ProductGrid';
-import ChatInterface from '@/components/ChatInterface';
+import FloatingAssistant from '@/components/FloatingAssistant';
 import { PRODUCTS_CATALOG, CatalogProduct } from '@/lib/productsData';
 
 export default function Home() {
   const [products, setProducts] = useState<CatalogProduct[]>(PRODUCTS_CATALOG);
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [selectedPriceBand, setSelectedPriceBand] = useState<'all' | 'budget' | 'mid' | 'premium'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [cartCount, setCartCount] = useState(0);
-  const [externalPrompt, setExternalPrompt] = useState<string | null>(null);
-  const [isChatOpen, setIsChatOpen] = useState(true);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
 
-  // Fetch live products if available
+  // Fetch live products from Cloud Firestore (with in-memory catalog fallback)
   useEffect(() => {
     async function fetchProducts() {
       try {
@@ -28,7 +29,7 @@ export default function Home() {
           }
         }
       } catch (err) {
-        console.warn('Using local master catalog');
+        console.warn('Using local master catalog', err);
       }
     }
     fetchProducts();
@@ -38,111 +39,112 @@ export default function Home() {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 3500);
+    }, 3000);
   };
 
-  // When user clicks "Ask AI to Order" on any product card
-  const handleAskAiToOrder = (product: CatalogProduct) => {
-    const prompt = `Please order 1 unit of ${product.name} (Product ID: ${product.id}) for ₹${product.displayPrice}.`;
-    setExternalPrompt(prompt);
-    setIsChatOpen(true);
-    showToast(`🤖 Commanding AI to order: ${product.name}`);
-  };
-
-  // When user clicks standard "Add to Cart"
   const handleAddToCart = (product: CatalogProduct) => {
-    setCartCount((prev) => prev + 1);
-    showToast(`🛒 Added ${product.name} to Cart!`);
+    showToast(`🛒 Added ${product.name} to your Cart!`);
   };
 
-  // When user clicks quick hero chips
-  const handleHeroQuickOrder = (prompt: string) => {
-    setExternalPrompt(prompt);
-    setIsChatOpen(true);
-    showToast(`🎙️ AI Command: "${prompt}"`);
+  const handleOpenAssistantWithPrompt = (prompt: string) => {
+    setAssistantPrompt(prompt);
+    setIsAssistantOpen(true);
   };
+
+  // Voice state machine drives this — single source of truth for UI updates
+  const handleProductSelect = useCallback((productId: string | null) => {
+    setHighlightedProductId(productId);
+  }, []);
 
   return (
-    <div className="amazon-store-container">
-      {/* Top Amazon Navigation Bar */}
-      <AmazonNavbar
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+      {/* Top Navbar with Theme Toggle, Search & Category selector */}
+      <Navbar
+        selectedCategory={selectedCategory}
+        onSelectCategory={setSelectedCategory}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
-        cartCount={cartCount}
-        onCartClick={() => {
-          showToast(`🛒 You have ${cartCount} items in your shopping bag.`);
-        }}
-        onToggleChat={() => setIsChatOpen((prev) => !prev)}
-        isChatOpen={isChatOpen}
+        onSearchSubmit={() => {}}
       />
 
-      {/* Floating Toast Notification */}
+      {/* Floating Toast Alert */}
       {toastMessage && (
-        <div className="amazon-toast-notification">
-          <span>{toastMessage}</span>
+        <div
+          style={{
+            position: 'fixed',
+            top: '80px',
+            right: '24px',
+            background: 'var(--accent-primary)',
+            color: '#ffffff',
+            padding: '0.75rem 1.25rem',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-lg)',
+            zIndex: 999,
+            fontWeight: 700,
+            fontSize: '0.9rem',
+            animation: 'modal-enter 0.2s ease',
+          }}
+        >
+          {toastMessage}
         </div>
       )}
 
-      {/* Main Split / Side-by-Side Content Area */}
-      <main className="amazon-main-split-layout">
-        {/* Left Area: Hero Banner + Product Catalog Grid (65-70% width on desktop) */}
-        <div className={`amazon-catalog-pane ${isChatOpen ? 'with-chat' : 'full-width'}`}>
-          <HeroBanner onQuickOrderClick={handleHeroQuickOrder} />
+      {/* Hero Showcase Banner */}
+      <HeroShowcase
+        onSelectCategory={setSelectedCategory}
+        onOpenAssistantWithPrompt={handleOpenAssistantWithPrompt}
+      />
 
-          <ProductGrid
-            products={products}
-            selectedCategory={selectedCategory}
-            onCategorySelect={setSelectedCategory}
-            searchQuery={searchQuery}
-            onAskAiToOrder={handleAskAiToOrder}
-            onAddToCart={handleAddToCart}
-          />
-        </div>
+      {/* Product Catalog Grid & Multi-Facet Filters */}
+      <ProductGrid
+        products={products}
+        selectedCategory={selectedCategory}
+        searchQuery={searchQuery}
+        selectedPriceBand={selectedPriceBand}
+        onPriceBandChange={setSelectedPriceBand}
+        onAddToCart={handleAddToCart}
+        highlightedProductId={highlightedProductId}
+      />
 
-        {/* Right Area: AI Shopping Copilot Bot (30-35% width on desktop) */}
-        {isChatOpen && (
-          <div className="amazon-ai-dock-pane">
-            <ChatInterface
-              externalPrompt={externalPrompt}
-              onClearExternalPrompt={() => setExternalPrompt(null)}
-              onClose={() => setIsChatOpen(false)}
-            />
-          </div>
-        )}
-      </main>
+      {/* Persistent Floating 3D Robot Assistant (Voice + Text + Manual Guided Shopping Wizard) */}
+      <FloatingAssistant
+        initialPrompt={assistantPrompt}
+        onCategoryFilterChange={setSelectedCategory}
+        onSearchChange={setSearchQuery}
+        onPriceBandChange={setSelectedPriceBand}
+        onProductSelect={handleProductSelect}
+        isOpen={isAssistantOpen}
+        onToggle={() => setIsAssistantOpen((prev) => !prev)}
+        onClose={() => setIsAssistantOpen(false)}
+      />
 
-      {/* Footer */}
-      <footer className="amazon-footer">
-        <div className="footer-top-btn" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-          Back to top ↑
-        </div>
-        <div className="footer-links-grid">
-          <div className="footer-col">
-            <h4>Get to Know Us</h4>
-            <a href="#">About PrimeStore</a>
-            <a href="#">Careers</a>
-            <a href="#">Press Releases</a>
-            <a href="#">AI Commerce Innovation</a>
+      {/* Modern Footer */}
+      <footer
+        style={{
+          background: 'var(--bg-secondary)',
+          borderTop: '1px solid var(--border-color)',
+          padding: '3rem 1.5rem',
+          color: 'var(--text-secondary)',
+          textAlign: 'center',
+          fontSize: '0.88rem',
+        }}
+      >
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+            prime<span style={{ color: 'var(--accent-gold)' }}>store</span> AI 2.0
           </div>
-          <div className="footer-col">
-            <h4>Payment & Security</h4>
-            <a href="#">Razorpay Test Sandbox</a>
-            <a href="#">100% Purchase Protection</a>
-            <a href="#">Human Approval Gate</a>
-            <a href="/dashboard">Merchant Admin Portal</a>
+          <p style={{ maxWidth: '600px', margin: '0 auto 1.5rem auto' }}>
+            The Next-Generation Voice &amp; AI-Driven E-Commerce Platform. Backed by Supabase, Cloud Firestore &amp; Razorpay Payments.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+            <a href="/" style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600 }}>Home</a>
+            <a href="/account" style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600 }}>Your Account</a>
+            <a href="/dashboard" style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600 }}>Merchant Dashboard</a>
+            <a href="/auth/login" style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600 }}>Login / Register</a>
           </div>
-          <div className="footer-col">
-            <h4>AI Copilot Features</h4>
-            <a href="#">Voice-to-Order Recognition</a>
-            <a href="#">Smart Recommendations</a>
-            <a href="#">Multi-Item Carting</a>
-            <a href="#">Instant Signature Verification</a>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            © 2026 PrimeStore Inc. All rights reserved.
           </div>
-        </div>
-        <div className="footer-bottom-copy">
-          <p>© 2026 PrimeStore AI. All rights reserved. Powered by Google Gemini 2.0 & Razorpay Payments.</p>
         </div>
       </footer>
     </div>

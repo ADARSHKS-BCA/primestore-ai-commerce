@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { getOrderByRazorpayId, updateOrder, updateCart } from '@/lib/dbStore';
+import { getOrderByRazorpayId, updateOrder, updateCart, getCartById } from '@/lib/dbStore';
 import { writeAuditLog } from '@/lib/auditLog';
+import { saveCustomerOrderToSupabase } from '@/lib/supabaseStore';
 
 /**
  * POST /api/payments/verify
  * 
  * High-performance, Security-Critical Payment Signature Verification Endpoint.
+ * - Recomputes HMAC-SHA256 signature with RAZORPAY_KEY_SECRET
+ * - Writes completed order to Supabase Customer History
+ * - Writes immutable audit log to Firebase Firestore
  */
 export async function POST(request: Request) {
   const reqStart = performance.now();
@@ -70,10 +74,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid payment signature' }, { status: 400 });
     }
 
-    // 4. Parallel Status & Audit Writes (Idempotent)
+    // 4. Parallel Status & Multi-DB Writes (Idempotent)
     const tUpdate0 = performance.now();
     if (order.status !== 'paid') {
+      const cart = await getCartById(order.cartId);
+
       await Promise.all([
+        // Update Firestore & memory stores
         updateOrder(order.id, {
           status: 'paid',
           razorpayPaymentId: razorpay_payment_id,
@@ -81,6 +88,7 @@ export async function POST(request: Request) {
         updateCart(order.cartId, {
           status: 'checked_out',
         }),
+        // Write Security Audit Log (Firestore)
         writeAuditLog({
           actor: 'system',
           action: 'payment_verified',
@@ -95,8 +103,21 @@ export async function POST(request: Request) {
           relatedOrderId: order.id,
           relatedCartId: order.cartId,
         }),
+        // Write Customer Order to Supabase
+        saveCustomerOrderToSupabase({
+          id: order.id,
+          userId: order.userId || null,
+          razorpayOrderId: razorpay_order_id,
+          razorpayPaymentId: razorpay_payment_id,
+          amount: order.amount,
+          totalDisplay: order.amount / 100,
+          currency: order.currency || 'INR',
+          status: 'paid',
+          items: cart?.items || [],
+          createdAt: new Date().toISOString(),
+        }),
       ]);
-      console.log(`⏱️ [STAGE 3: DB_PARALLEL_UPDATES] Order marked PAID and Cart CHECKED OUT in ${(performance.now() - tUpdate0).toFixed(1)}ms`);
+      console.log(`⏱️ [STAGE 3: DB_PARALLEL_UPDATES] Order marked PAID in Firestore + Supabase in ${(performance.now() - tUpdate0).toFixed(1)}ms`);
     }
 
     const totalDuration = performance.now() - reqStart;

@@ -1,5 +1,8 @@
 /**
- * Seed script — populates the `products` collection with sample data.
+ * Seed script — populates the Firestore `products` collection with enriched catalog data.
+ * 
+ * Enriches product images using the multi-tier image lookup service:
+ * Pexels API -> Pixabay API -> Deterministic Seeded Picsum Placeholder
  * 
  * Run: npx tsx scripts/seedProducts.ts
  */
@@ -7,6 +10,7 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { PRODUCTS_CATALOG } from '../lib/productsData';
+import { getProductImage } from '../lib/imageLookupService';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -52,20 +56,41 @@ if (getApps().length === 0) {
 }
 
 const db = getFirestore();
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function seed() {
   console.log(`🌱 [CLOUD FIRESTORE] Seeding products collection to project: "${projectId}"...\n`);
 
   const batch = db.batch();
+  let count = 0;
 
   for (const product of PRODUCTS_CATALOG) {
+    count++;
+
+    // Enrich product image via multi-tier lookup chain
+    let finalImageUrl = product.imageUrl;
+    try {
+      const lookup = await getProductImage(product);
+      finalImageUrl = lookup.imageUrl;
+      console.log(
+        `  [${count}/${PRODUCTS_CATALOG.length}] [${lookup.source.toUpperCase()}] ${product.name.slice(0, 35)} — ₹${product.displayPrice}`
+      );
+      if (lookup.source !== 'cache') {
+        await sleep(250); // Free-tier rate-limit throttling
+      }
+    } catch (err) {
+      console.warn(`  ⚠️ Image enrichment failed for ${product.id}, preserving default:`, err);
+    }
+
     const ref = db.collection('products').doc(product.id);
-    batch.set(ref, product);
-    console.log(`  ✅ ${product.name} — ₹${product.displayPrice}`);
+    batch.set(ref, {
+      ...product,
+      imageUrl: finalImageUrl,
+    });
   }
 
   await batch.commit();
-  console.log(`\n🎉 Successfully seeded ${PRODUCTS_CATALOG.length} products to Cloud Firestore!`);
+  console.log(`\n🎉 Successfully seeded and enriched ${PRODUCTS_CATALOG.length} products to Cloud Firestore!`);
 }
 
 seed().catch((err) => {
