@@ -467,11 +467,12 @@ export default function FloatingAssistant({
     setManualCreatingCart(true);
     setManualSelectedProduct(product);
     try {
-      const res = await fetch('/api/orders/create', {
+      const res = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: [{ productId: product.id, quantity: manualQuantity }],
+          message: `Order ${manualQuantity > 1 ? `${manualQuantity} ` : ''}${product.name}`,
+          conversationHistory: [],
         }),
       });
       const data = await res.json();
