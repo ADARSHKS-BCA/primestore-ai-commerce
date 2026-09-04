@@ -135,9 +135,9 @@ export default function ApprovalQueue() {
 
   return (
     <div className="approval-queue-section">
-      <h2>🔔 Pending Approvals</h2>
+      <h2>Pending Approvals</h2>
 
-      {error && <div className="cart-error">⚠️ {error}</div>}
+      {error && <div className="cart-error">{error}</div>}
 
       {pendingCarts.length === 0 ? (
         <p className="audit-empty">No pending carts. AI cart proposals will appear here.</p>
@@ -184,14 +184,14 @@ export default function ApprovalQueue() {
                     disabled={processing === cart.id}
                     className="btn btn-approve"
                   >
-                    {processing === cart.id ? '⏳' : '✅ Approve & Pay'}
+                    {processing === cart.id ? 'Processing...' : 'Approve & Pay'}
                   </button>
                   <button
                     onClick={() => handleReject(cart.id)}
                     disabled={processing === cart.id}
                     className="btn btn-reject"
                   >
-                    {processing === cart.id ? '⏳' : '❌ Reject'}
+                    {processing === cart.id ? 'Processing...' : 'Reject'}
                   </button>
                 </div>
               )}

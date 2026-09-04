@@ -11,6 +11,8 @@ interface NavbarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onSearchSubmit: () => void;
+  cartItemCount?: number;
+  onOpenCart?: () => void;
 }
 
 export default function Navbar({
@@ -19,6 +21,8 @@ export default function Navbar({
   searchQuery,
   onSearchChange,
   onSearchSubmit,
+  cartItemCount = 0,
+  onOpenCart,
 }: NavbarProps) {
   const [dropdownCategory, setDropdownCategory] = useState('All Categories');
 
@@ -85,6 +89,40 @@ export default function Navbar({
         <div className="navbar-actions">
           {/* Theme Toggle (Light / Dark) */}
           <ThemeToggle />
+
+          {/* Cart Button with Count Badge */}
+          {onOpenCart && (
+            <button
+              onClick={onOpenCart}
+              className="nav-link-btn"
+              style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                background: cartItemCount > 0 ? 'rgba(6, 182, 212, 0.15)' : undefined,
+                borderColor: cartItemCount > 0 ? 'var(--accent-cyan)' : undefined,
+              }}
+              title="View Cart & Checkout"
+            >
+              <span>Cart</span>
+              {cartItemCount > 0 && (
+                <span
+                  style={{
+                    background: 'var(--accent-primary)',
+                    color: '#ffffff',
+                    padding: '1px 7px',
+                    borderRadius: '9999px',
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                  }}
+                >
+                  {cartItemCount}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* User Account / Profile */}
           <Link href="/account" className="nav-link-btn" title="Your Account & Order History">

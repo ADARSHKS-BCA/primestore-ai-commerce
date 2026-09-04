@@ -180,7 +180,7 @@ export default function VoiceSessionTable() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            🎙️ Voice Shopping Audit Trail & AI Growth Logs
+            Voice Shopping Audit Trail &amp; AI Growth Logs
           </h2>
           <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
             Full explainable turn-by-turn reasoning, bounded-action confirmations, upsell conversions, and payment telemetry.

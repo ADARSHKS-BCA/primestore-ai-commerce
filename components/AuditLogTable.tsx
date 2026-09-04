@@ -112,9 +112,10 @@ export default function AuditLogTable() {
   return (
     <div className="audit-log-section">
       <div className="audit-header">
-        <h2>📋 Audit Trail</h2>
-        <span className="realtime-indicator">
-          {useRealtime ? '🟢 Real-time' : '🟡 Polling'}
+        <h2>Audit Trail</h2>
+        <span className="realtime-indicator" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: useRealtime ? '#10b981' : '#f59e0b' }} />
+          {useRealtime ? 'Live Real-time' : 'Polling Sync'}
         </span>
       </div>
 

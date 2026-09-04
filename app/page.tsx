@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 import HeroShowcase from '@/components/HeroShowcase';
 import ProductGrid from '@/components/ProductGrid';
 import FloatingAssistant from '@/components/FloatingAssistant';
+import CartDrawer, { CartItemData } from '@/components/CartDrawer';
 import { PRODUCTS_CATALOG, CatalogProduct } from '@/lib/productsData';
 
 export default function Home() {
@@ -20,6 +21,35 @@ export default function Home() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
 
+  // Cart State
+  const [cartItems, setCartItems] = useState<CartItemData[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // Load saved cart from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedCart = localStorage.getItem('primestore_cart');
+      if (savedCart) {
+        try {
+          const parsed = JSON.parse(savedCart);
+          if (Array.isArray(parsed)) {
+            setCartItems(parsed);
+          }
+        } catch {
+          // ignore corrupted cart
+        }
+      }
+    }
+  }, []);
+
+  // Save cart to localStorage on changes
+  const updateAndPersistCart = useCallback((updated: CartItemData[]) => {
+    setCartItems(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('primestore_cart', JSON.stringify(updated));
+    }
+  }, []);
+
   // Ensure user is logged in before viewing storefront
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -32,23 +62,57 @@ export default function Home() {
     }
   }, [router]);
 
-  // Fetch live products from Cloud Firestore (with in-memory catalog fallback)
-  useEffect(() => {
-    async function fetchProducts() {
-      try {
-        const res = await fetch('/api/products');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.products && Array.isArray(data.products) && data.products.length > 0) {
-            setProducts(data.products);
-          }
+  // Fetch live products from Cloud Firestore (with in-memory catalog fallback) & Auto-Refresh
+  const fetchLiveProducts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/products');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.products && Array.isArray(data.products) && data.products.length > 0) {
+          setProducts(data.products);
         }
-      } catch (err) {
-        console.warn('Using local master catalog', err);
       }
+    } catch (err) {
+      console.warn('Using local master catalog', err);
     }
-    fetchProducts();
   }, []);
+
+  useEffect(() => {
+    fetchLiveProducts();
+
+    // Auto-refresh catalog every 20 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchLiveProducts();
+      }
+    }, 20000);
+
+    // Auto-refresh when tab/window gains focus
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchLiveProducts();
+        // Also sync cart from storage in case it changed in another tab
+        const savedCart = localStorage.getItem('primestore_cart');
+        if (savedCart) {
+          try {
+            const parsed = JSON.parse(savedCart);
+            if (Array.isArray(parsed)) setCartItems(parsed);
+          } catch {}
+        }
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('storage', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('storage', handleFocus);
+    };
+  }, [fetchLiveProducts]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -57,8 +121,65 @@ export default function Home() {
     }, 3000);
   };
 
+  // Add Product to Cart Action
   const handleAddToCart = (product: CatalogProduct) => {
-    showToast(`Added ${product.name} to your Cart`);
+    setCartItems((prev) => {
+      const existingIndex = prev.findIndex((item) => item.productId === product.id);
+      let updated: CartItemData[];
+      if (existingIndex > -1) {
+        updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          quantity: updated[existingIndex].quantity + 1,
+        };
+      } else {
+        updated = [
+          ...prev,
+          {
+            productId: product.id,
+            name: product.name,
+            brand: product.brand,
+            price: product.price,
+            displayPrice: product.displayPrice,
+            imageUrl: product.imageUrl,
+            quantity: 1,
+            category: product.category,
+          },
+        ];
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('primestore_cart', JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    showToast(`Added ${product.name} to Cart`);
+  };
+
+  // Update item quantity in cart
+  const handleUpdateQuantity = (productId: string, delta: number) => {
+    const updated = cartItems
+      .map((item) => {
+        if (item.productId === productId) {
+          const newQty = item.quantity + delta;
+          return newQty > 0 ? { ...item, quantity: newQty } : null;
+        }
+        return item;
+      })
+      .filter(Boolean) as CartItemData[];
+
+    updateAndPersistCart(updated);
+  };
+
+  // Remove item from cart
+  const handleRemoveItem = (productId: string) => {
+    const updated = cartItems.filter((item) => item.productId !== productId);
+    updateAndPersistCart(updated);
+  };
+
+  // Clear cart
+  const handleClearCart = () => {
+    updateAndPersistCart([]);
   };
 
   const handleOpenAssistantWithPrompt = (prompt: string) => {
@@ -84,15 +205,19 @@ export default function Home() {
     );
   }
 
+  const totalCartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
-      {/* Top Navbar with Theme Toggle, Search & Category selector */}
+      {/* Top Navbar with Cart Button, Theme Toggle, Search & Category selector */}
       <Navbar
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onSearchSubmit={() => {}}
+        cartItemCount={totalCartItemCount}
+        onOpenCart={() => setIsCartOpen(true)}
       />
 
       {/* Floating Toast Alert */}
@@ -134,6 +259,19 @@ export default function Home() {
         highlightedProductId={highlightedProductId}
       />
 
+      {/* Slide-out Shopping Cart Drawer with 1-Click Razorpay Payment */}
+      <CartDrawer
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        items={cartItems}
+        onUpdateQuantity={handleUpdateQuantity}
+        onRemoveItem={handleRemoveItem}
+        onClearCart={handleClearCart}
+        onPaymentSuccess={(orderId) => {
+          showToast(`Order #${orderId} placed successfully!`);
+        }}
+      />
+
       {/* Persistent Floating 3D Robot Assistant (Voice + Text + Manual Guided Shopping Wizard) */}
       <FloatingAssistant
         initialPrompt={assistantPrompt}
@@ -166,9 +304,11 @@ export default function Home() {
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
             <a href="/" style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600 }}>Home</a>
+            <button onClick={() => setIsCartOpen(true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600, fontSize: '0.88rem', padding: 0 }}>
+              Cart ({totalCartItemCount})
+            </button>
             <a href="/account" style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600 }}>Your Account</a>
             <a href="/dashboard" style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600 }}>Merchant Dashboard</a>
-            <a href="/auth/login" style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600 }}>Login / Register</a>
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
             © 2026 PrimeStore Inc. All rights reserved.

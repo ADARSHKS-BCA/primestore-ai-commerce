@@ -18,6 +18,41 @@ export default function AccountPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSavedMsg, setProfileSavedMsg] = useState(false);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  const fetchUserDataAndOrders = async (userId: string, isManual = false) => {
+    if (isManual) setRefreshing(true);
+    try {
+      // Fetch user profile from Supabase
+      const profileRes = await fetch(`/api/user/profile?userId=${encodeURIComponent(userId)}`);
+      if (profileRes.ok) {
+        const data = await profileRes.json();
+        if (data.profile) {
+          if (data.profile.fullName) setFullName(data.profile.fullName);
+          if (data.profile.phone) setPhone(data.profile.phone);
+          if (data.profile.address) setAddress(data.profile.address);
+        }
+      }
+
+      // Fetch user order history from Supabase / Firestore
+      const ordersRes = await fetch(`/api/orders/user?userId=${encodeURIComponent(userId)}`);
+      if (ordersRes.ok) {
+        const data = await ordersRes.json();
+        if (data.orders && Array.isArray(data.orders)) {
+          setOrders(data.orders);
+        }
+      }
+    } catch (err) {
+      console.warn('Auto-refresh sync error:', err);
+    } finally {
+      setLoading(false);
+      if (isManual) {
+        setTimeout(() => setRefreshing(false), 500);
+      }
+    }
+  };
+
   useEffect(() => {
     const savedUser = localStorage.getItem('primestore_user');
     if (!savedUser) {
@@ -37,29 +72,30 @@ export default function AccountPage() {
     setFullName(currentUser.name || '');
     setEmail(currentUser.email || '');
 
-    // Fetch user profile from Supabase
-    fetch(`/api/user/profile?userId=${encodeURIComponent(currentUser.id)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.profile) {
-          if (data.profile.fullName) setFullName(data.profile.fullName);
-          if (data.profile.phone) setPhone(data.profile.phone);
-          if (data.profile.address) setAddress(data.profile.address);
-        }
-      })
-      .catch((err) => console.warn('Profile fetch error:', err));
+    fetchUserDataAndOrders(currentUser.id);
 
-    // Fetch user order history from Supabase / Firestore
-    fetch(`/api/orders/user?userId=${encodeURIComponent(currentUser.id)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.orders) {
-          setOrders(data.orders);
-        }
-      })
-      .catch((err) => console.warn('Failed to load orders:', err))
-      .finally(() => setLoading(false));
-  }, []);
+    // Auto-refresh interval (every 10 seconds)
+    const interval = setInterval(() => {
+      if (autoRefresh && document.visibilityState === 'visible') {
+        fetchUserDataAndOrders(currentUser.id);
+      }
+    }, 10000);
+
+    // Auto-refresh on tab focus / visibility change
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchUserDataAndOrders(currentUser.id);
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [router, autoRefresh]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,7 +324,7 @@ export default function AccountPage() {
         </div>
 
         {/* Section Header */}
-        <div className="account-header" style={{ marginBottom: '1rem' }}>
+        <div className="account-header" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
               Order & Payment History
@@ -296,6 +332,45 @@ export default function AccountPage() {
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0' }}>
               Real-time records for your account backed by Supabase & Razorpay Test Mode.
             </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              style={{
+                background: autoRefresh ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-input)',
+                border: `1px solid ${autoRefresh ? '#10b981' : 'var(--border-color)'}`,
+                color: autoRefresh ? '#10b981' : 'var(--text-secondary)',
+                padding: '4px 10px',
+                borderRadius: '9999px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: autoRefresh ? '#10b981' : 'var(--text-muted)' }} />
+              {autoRefresh ? 'Auto-Refresh: ON' : 'Auto-Refresh: PAUSED'}
+            </button>
+
+            <button
+              onClick={() => user?.id && fetchUserDataAndOrders(user.id, true)}
+              disabled={refreshing}
+              style={{
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)',
+                padding: '4px 12px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              {refreshing ? 'Syncing...' : 'Refresh Now'}
+            </button>
           </div>
         </div>
 
