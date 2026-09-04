@@ -121,7 +121,37 @@
 
 ---
 
-## 🚀 6. Getting Started & Installation
+## 🤖 6. AI Model Challenges & Technical Obstacles
+
+When building and deploying AI models and conversational agents for e-commerce, several fundamental AI-specific challenges were encountered and solved:
+
+### 1. Hallucinations in Financial & Transactional Actions
+* **The Problem**: Pure Generative Large Language Models (LLMs) are non-deterministic and probabilistic. In e-commerce, an unconstrained model will hallucinate non-existent product IDs, invent fictional discounts, or attempt to execute payments autonomously without user consent.
+* **How We Solved It**: Decoupled conversational understanding from transaction execution using a **Deterministic 7-State Finite State Machine (FSM)**. The AI operates within strict boundaries: it can query and recommend, but it can never trigger a charge. All orders require explicit human confirmation and are validated against hard database constraints (`ORDER_LIMIT_PAISE = 10,000 INR`).
+
+### 2. Turn-by-Turn Conversational Latency in Voice Shopping
+* **The Problem**: Standard cloud LLM inference APIs introduce a 1.5s–3.5s latency per conversational turn. In voice commerce, even a 1-second delay feels broken and unnatural to the user.
+* **How We Solved It**: Implemented a **Hybrid Edge Intent Parser & Fast Classifier** that intercepts and maps high-frequency user actions (e.g. price filters, category shifts, brand lookups, cart additions) in sub-150ms. Complex advisory and recommendation turns are streamed using partial interim transcripts (`onInterimTranscript`) so speech synthesis begins immediately.
+
+### 3. Context Drift & Static Prompt Anchoring
+* **The Problem**: Prompt templates in conversational agents often anchor to sample defaults (e.g. static user names like "Adarsh" or default sample items like "boAt BassHeads ₹499"), leading to context drift where the bot ignores active user data.
+* **How We Solved It**: Implemented **Dynamic Runtime Context Injection**. The AI Copilot dynamically extracts the active logged-in user profile from Supabase/Firestore session tokens and injects live catalog state into the prompt before generating responses.
+
+### 4. Speech-to-Text (STT) Transcription & Acoustic Ambiguity
+* **The Problem**: Acoustic speech recognition models often mishear brand names, technical specs, or Indian product naming conventions (e.g. "Sony WH-1000XM5" transcribed as "Sony double H" or "Noise ColorFit" as "Noise color fit").
+* **How We Solved It**: Integrated a **Fuzzy Phonetic & Catalog Matching Pipeline** that normalizes voice transcripts against the live product taxonomy, brand synonyms, and numeric price bands before intent execution.
+
+### 5. Over-Aggressive / Unbounded AI Upselling
+* **The Problem**: Autonomous models prompted to maximize cart value often repeatedly push upsells across multiple turns, annoying shoppers and increasing cart abandonment.
+* **How We Solved It**: Implemented a **Single-Turn Bounded Upsell Policy** (`MAX_UPSELL_TURNS = 1`). The AI presents exactly one contextually relevant companion accessory (e.g. laptop sleeve with MacBook). If declined or ignored, the agent immediately transitions to checkout without reprompting.
+
+### 6. Black-Box Auditability for Store Merchants
+* **The Problem**: Merchants cannot troubleshoot why an AI bot made a specific recommendation, what intent was recognized, or why a conversion was lost.
+* **How We Solved It**: Designed an **Explainable AI Audit Engine** in the Merchant Console (`/dashboard`), logging every voice session's raw transcript, extracted intent, state transition graph, reasoning explanation, and payment telemetry in real time.
+
+---
+
+## 🚀 7. Getting Started & Installation
 
 ### Prerequisites
 - **Node.js**: v18.0.0 or higher
@@ -163,7 +193,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 📜 7. License & Credits
+## 📜 8. License & Credits
 
 Built with ❤️ by **Adarsh K S** for Next-Generation Agentic Commerce.
 Licensed under the [MIT License](LICENSE).
