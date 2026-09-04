@@ -18,6 +18,7 @@ export type IntentType =
   | 'show_expensive'
   | 'select_product'
   | 'ask_review'
+  | 'get_review'
   | 'order_it'
   | 'add_to_cart'
   | 'confirm_yes'
@@ -36,8 +37,12 @@ export interface ParsedIntent {
     brand?: string;
     priceMin?: number;
     priceMax?: number;
+    minPrice?: number;
+    maxPrice?: number;
+    priceBand?: 'all' | 'budget' | 'mid' | 'premium';
     productName?: string;
     productIndex?: number;
+    itemIndex?: number;
     productId?: string;
     addressText?: string;
     rawText: string;

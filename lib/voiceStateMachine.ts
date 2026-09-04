@@ -408,7 +408,7 @@ function handlePriceRangeState(session: VoiceSession, intent: ParsedIntent): Sta
     }
   }
 
-  if (intent.type === 'get_review' && session.selectedProduct) {
+  if ((intent.type === 'get_review' || intent.type === 'ask_review') && session.selectedProduct) {
     return presentReview(session, session.selectedProduct);
   }
 
@@ -435,7 +435,7 @@ function handleShowResultsState(session: VoiceSession, intent: ParsedIntent): St
     }
   }
 
-  if (intent.type === 'get_review') {
+  if (intent.type === 'get_review' || intent.type === 'ask_review') {
     const product = intent.slots.productId
       ? PRODUCTS_CATALOG.find((p) => p.id === intent.slots.productId) || session.selectedProduct || session.filteredProducts[0]
       : session.selectedProduct || session.filteredProducts[0];
@@ -482,7 +482,7 @@ function handleProductDetailState(session: VoiceSession, intent: ParsedIntent): 
     return promptUpsellOrCart(session, product);
   }
 
-  if (intent.type === 'get_review') {
+  if (intent.type === 'get_review' || intent.type === 'ask_review') {
     return presentReview(session, product);
   }
 
@@ -1042,11 +1042,14 @@ function navigateToCategory(session: VoiceSession, category: string, brand: stri
 
 function applyPriceFilter(session: VoiceSession, intent: ParsedIntent): StateTransitionResult {
   const band = intent.slots.priceBand;
+  const maxPrice = intent.slots.priceMax ?? intent.slots.maxPrice;
+  const minPrice = intent.slots.priceMin ?? intent.slots.minPrice ?? 0;
+
   if (band && band !== 'all') {
     session.priceRange =
       band === 'budget' ? { min: 0, max: 2000 } : band === 'mid' ? { min: 2000, max: 8000 } : { min: 8000, max: 1000000 };
-  } else if (intent.slots.maxPrice) {
-    session.priceRange = { min: intent.slots.minPrice || 0, max: intent.slots.maxPrice };
+  } else if (maxPrice !== undefined) {
+    session.priceRange = { min: minPrice, max: maxPrice };
   }
 
   session.state = 'price_range';
@@ -1073,9 +1076,14 @@ function applyPriceFilter(session: VoiceSession, intent: ParsedIntent): StateTra
 
 function handleProductSelection(session: VoiceSession, intent: ParsedIntent): StateTransitionResult {
   let product: CatalogProduct | null = null;
+  const targetIdx = intent.slots.productIndex !== undefined
+    ? intent.slots.productIndex
+    : intent.slots.itemIndex !== undefined
+    ? intent.slots.itemIndex - 1
+    : undefined;
 
-  if (intent.slots.itemIndex && session.filteredProducts.length >= intent.slots.itemIndex) {
-    product = session.filteredProducts[intent.slots.itemIndex - 1];
+  if (targetIdx !== undefined && targetIdx >= 0 && session.filteredProducts.length > targetIdx) {
+    product = session.filteredProducts[targetIdx];
   } else if (intent.slots.productId) {
     product = PRODUCTS_CATALOG.find((p) => p.id === intent.slots.productId) || null;
   } else if (session.filteredProducts.length > 0) {
