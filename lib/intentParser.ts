@@ -347,34 +347,81 @@ export function parseIntent(utterance: string): ParsedIntent {
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
-function matchProductFromText(text: string): CatalogProduct | null {
-  const q = text.toLowerCase();
+export function matchProductFromText(text: string, currentFilteredProducts?: CatalogProduct[]): CatalogProduct | null {
+  const q = text.toLowerCase().trim();
+  if (!q) return null;
 
-  // Exact ID match
-  const byId = PRODUCTS_CATALOG.find((p) => q.includes(p.id.toLowerCase()));
+  // 1. Exact ID match
+  const byId = PRODUCTS_CATALOG.find((p) => p.id.toLowerCase() === q || q.includes(p.id.toLowerCase()));
   if (byId) return byId;
 
-  // Name match (partial, longest match wins)
-  let bestMatch: CatalogProduct | null = null;
-  let bestLen = 0;
+  // 2. Exact full Name match
+  const byExactName = PRODUCTS_CATALOG.find((p) => q.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(q));
+  if (byExactName) return byExactName;
 
-  for (const p of PRODUCTS_CATALOG) {
-    const nameLower = p.name.toLowerCase();
-    // Check if significant part of product name appears in query
-    const nameWords = nameLower.split(/\s+/);
-    const matchedWords = nameWords.filter((w) => w.length > 2 && q.includes(w));
-    if (matchedWords.length >= 2 && matchedWords.length > bestLen) {
-      bestMatch = p;
-      bestLen = matchedWords.length;
+  // 3. Tokenize query and remove generic stop words
+  const stopWords = new Set([
+    'i', 'want', 'to', 'buy', 'order', 'get', 'the', 'a', 'an', 'please',
+    'for', 'me', 'this', 'that', 'item', 'product', 'from', 'with', 'and',
+    'show', 'give', 'tell', 'about', 'is', 'it', 'can', 'you', 'my'
+  ]);
+
+  const queryTokens = q
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !stopWords.has(w));
+
+  if (queryTokens.length === 0) return null;
+
+  let bestScore = 0;
+  let bestProduct: CatalogProduct | null = null;
+
+  for (const product of PRODUCTS_CATALOG) {
+    let score = 0;
+    const nameLower = product.name.toLowerCase();
+    const brandLower = product.brand.toLowerCase();
+    const categoryLower = product.category.toLowerCase();
+    const descLower = product.description.toLowerCase();
+    const specsLower = product.specs.join(' ').toLowerCase();
+
+    let matchedTokenCount = 0;
+
+    for (const token of queryTokens) {
+      if (nameLower.includes(token)) {
+        score += 30;
+        matchedTokenCount++;
+      } else if (brandLower === token || brandLower.includes(token)) {
+        score += 25;
+        matchedTokenCount++;
+      } else if (specsLower.includes(token)) {
+        score += 15;
+        matchedTokenCount++;
+      } else if (descLower.includes(token)) {
+        score += 10;
+      } else if (categoryLower.includes(token)) {
+        score += 5;
+      }
+    }
+
+    // Boost if multiple tokens matched
+    if (matchedTokenCount >= 2) {
+      score += matchedTokenCount * 20;
+    }
+
+    // Boost if product is in currently filtered list on screen
+    if (currentFilteredProducts && currentFilteredProducts.some((p) => p.id === product.id)) {
+      score += 10;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestProduct = product;
     }
   }
-  if (bestMatch) return bestMatch;
 
-  // Brand + category match
-  for (const p of PRODUCTS_CATALOG) {
-    if (q.includes(p.brand.toLowerCase())) {
-      return p;
-    }
+  // Minimum confidence threshold of 25 to avoid false positives
+  if (bestScore >= 25 && bestProduct) {
+    return bestProduct;
   }
 
   return null;

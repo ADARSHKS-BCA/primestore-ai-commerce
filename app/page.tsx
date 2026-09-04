@@ -256,6 +256,7 @@ export default function Home() {
         selectedPriceBand={selectedPriceBand}
         onPriceBandChange={setSelectedPriceBand}
         onAddToCart={handleAddToCart}
+        onOpenAssistantForProduct={(p) => handleProductSelect(p.id)}
         highlightedProductId={highlightedProductId}
       />
 
@@ -275,6 +276,7 @@ export default function Home() {
       {/* Persistent Floating 3D Robot Assistant (Voice + Text + Manual Guided Shopping Wizard) */}
       <FloatingAssistant
         initialPrompt={assistantPrompt}
+        activeProductId={highlightedProductId}
         onCategoryFilterChange={setSelectedCategory}
         onSearchChange={setSearchQuery}
         onPriceBandChange={setSelectedPriceBand}

@@ -14,7 +14,7 @@
  */
 
 import { CatalogProduct, PRODUCTS_CATALOG } from './productsData';
-import { parseIntent, ParsedIntent } from './intentParser';
+import { parseIntent, ParsedIntent, matchProductFromText } from './intentParser';
 import { Cart } from './schemas';
 
 // ─── Cross-Sell Catalog ───────────────────────────────────────────
@@ -312,10 +312,68 @@ function handleOpenState(session: VoiceSession, intent: ParsedIntent): StateTran
       apiAction: null,
       apiPayload: null,
     };
+function resolveProductFromIntent(session: VoiceSession, intent: ParsedIntent): CatalogProduct | null {
+  // 1. Explicit productId from slots
+  if (intent.slots.productId) {
+    const p = PRODUCTS_CATALOG.find((x) => x.id === intent.slots.productId);
+    if (p) return p;
   }
 
-  if (intent.type === 'order_it' && intent.slots.productId) {
-    const product = PRODUCTS_CATALOG.find((p) => p.id === intent.slots.productId) || null;
+  // 2. Intelligent token matching from raw utterance
+  if (intent.slots.rawText) {
+    const p = matchProductFromText(intent.slots.rawText, session.filteredProducts);
+    if (p) return p;
+  }
+
+  // 3. Match from parsed product name
+  if (intent.slots.productName) {
+    const p = matchProductFromText(intent.slots.productName, session.filteredProducts);
+    if (p) return p;
+  }
+
+  // 4. Fallback to active product in session
+  if (session.selectedProduct) {
+    return session.selectedProduct;
+  }
+
+  // 5. If exactly 1 product is on screen, choose that one
+  if (session.filteredProducts && session.filteredProducts.length === 1) {
+    return session.filteredProducts[0];
+  }
+
+  return null;
+}
+
+function handleOpenState(session: VoiceSession, intent: ParsedIntent): StateTransitionResult {
+  if (intent.type === 'navigate_category' && intent.slots.category) {
+    return navigateToCategory(session, intent.slots.category, intent.slots.brand || null);
+  }
+
+  if (intent.type === 'set_brand' && intent.slots.brand) {
+    const category = inferCategoryFromBrand(intent.slots.brand);
+    if (category) {
+      return navigateToCategory(session, category, intent.slots.brand);
+    }
+    session.brand = intent.slots.brand;
+    session.state = 'brand';
+    const products = filterProducts(session);
+    session.filteredProducts = products;
+    return {
+      newState: 'brand',
+      botResponse: `I found ${products.length} ${intent.slots.brand} products. Which category interests you — Audio, Footwear, Wearables, Peripherals, Storage, or Gaming?`,
+      filteredProducts: products,
+      selectedProduct: null,
+      categoryFilter: null,
+      priceBandFilter: null,
+      requiresLLM: false,
+      requiresApiCall: false,
+      apiAction: null,
+      apiPayload: null,
+    };
+  }
+
+  if (intent.type === 'order_it') {
+    const product = resolveProductFromIntent(session, intent);
     if (product) {
       session.selectedProduct = product;
       return promptUpsellOrCart(session, product);
@@ -368,6 +426,14 @@ function handleCategoryState(session: VoiceSession, intent: ParsedIntent): State
     return handleProductSelection(session, intent);
   }
 
+  if (intent.type === 'order_it') {
+    const product = resolveProductFromIntent(session, intent);
+    if (product) {
+      session.selectedProduct = product;
+      return promptUpsellOrCart(session, product);
+    }
+  }
+
   if (intent.type === 'unrecognized') {
     return { ...fallbackPrompt(session), requiresLLM: true };
   }
@@ -382,6 +448,14 @@ function handleBrandState(session: VoiceSession, intent: ParsedIntent): StateTra
 
   if (intent.type === 'select_product') {
     return handleProductSelection(session, intent);
+  }
+
+  if (intent.type === 'order_it') {
+    const product = resolveProductFromIntent(session, intent);
+    if (product) {
+      session.selectedProduct = product;
+      return promptUpsellOrCart(session, product);
+    }
   }
 
   if (intent.type === 'navigate_category' && intent.slots.category) {
@@ -400,8 +474,8 @@ function handlePriceRangeState(session: VoiceSession, intent: ParsedIntent): Sta
     return handleProductSelection(session, intent);
   }
 
-  if (intent.type === 'order_it' && intent.slots.productId) {
-    const product = PRODUCTS_CATALOG.find((p) => p.id === intent.slots.productId) || null;
+  if (intent.type === 'order_it') {
+    const product = resolveProductFromIntent(session, intent);
     if (product) {
       session.selectedProduct = product;
       return promptUpsellOrCart(session, product);
@@ -425,20 +499,29 @@ function handleShowResultsState(session: VoiceSession, intent: ParsedIntent): St
   }
 
   if (intent.type === 'order_it') {
-    const product = intent.slots.productId
-      ? PRODUCTS_CATALOG.find((p) => p.id === intent.slots.productId) || session.filteredProducts[0]
-      : session.selectedProduct || session.filteredProducts[0];
+    const product = resolveProductFromIntent(session, intent);
 
     if (product) {
       session.selectedProduct = product;
       return promptUpsellOrCart(session, product);
     }
+
+    return {
+      newState: 'show_results',
+      botResponse: `Which product would you like to order? Please tell me the specific product name so I can prepare the exact order for you.`,
+      filteredProducts: session.filteredProducts,
+      selectedProduct: null,
+      categoryFilter: session.category,
+      priceBandFilter: null,
+      requiresLLM: false,
+      requiresApiCall: false,
+      apiAction: null,
+      apiPayload: null,
+    };
   }
 
   if (intent.type === 'get_review' || intent.type === 'ask_review') {
-    const product = intent.slots.productId
-      ? PRODUCTS_CATALOG.find((p) => p.id === intent.slots.productId) || session.selectedProduct || session.filteredProducts[0]
-      : session.selectedProduct || session.filteredProducts[0];
+    const product = resolveProductFromIntent(session, intent);
 
     if (product) {
       return presentReview(session, product);

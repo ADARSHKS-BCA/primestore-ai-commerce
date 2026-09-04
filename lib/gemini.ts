@@ -1,6 +1,7 @@
 import { getProductsList, getProductById, saveCart } from './dbStore';
 import { writeAuditLog } from './auditLog';
 import { Product, CartItem, Cart } from './schemas';
+import { matchProductFromText } from './intentParser';
 
 /**
  * Multi-Provider Ultra-Fast AI Shopping Agent (Groq LPU / OpenRouter / Smart Fallback)
@@ -340,32 +341,37 @@ async function runFallbackParser(userMessage: string) {
 
   // 1. Handle Explicit Order
   if (isExplicitOrder) {
-    let matchedProduct = allProducts.find((p) => q.includes(p.id.toLowerCase()));
+    let matchedProduct = matchProductFromText(userMessage);
+
     if (!matchedProduct) {
-      matchedProduct = allProducts.find((p) => q.includes(p.name.toLowerCase()) || q.includes(p.brand.toLowerCase()));
-    }
-    if (!matchedProduct) {
-      if (isShoesQuery) matchedProduct = allProducts.find((p) => p.id === 'prod_nike_air_max_sc') || allProducts.find((p) => p.category === 'Footwear');
-      else if (isAudioQuery) matchedProduct = allProducts.find((p) => p.id === 'prod_earbuds_pro') || allProducts.find((p) => p.category === 'Audio');
-      else if (isWatchQuery) matchedProduct = allProducts.find((p) => p.id === 'prod_smartwatch_ultra') || allProducts.find((p) => p.category === 'Wearables');
-      else if (isPeripheralsQuery) matchedProduct = allProducts.find((p) => p.id === 'prod_keyboard_rgb') || allProducts.find((p) => p.category === 'Peripherals');
-      else if (isStorageQuery) matchedProduct = allProducts.find((p) => p.id === 'prod_ssd_portable_1tb') || allProducts.find((p) => p.category === 'Storage');
-      else if (isGamingQuery) matchedProduct = allProducts.find((p) => p.id === 'prod_gaming_mouse_wireless') || allProducts.find((p) => p.category === 'Gaming');
+      const stopWords = new Set(['order', 'buy', 'it', 'this', 'that', 'please', 'i', 'want', 'the', 'a', 'an', 'to', 'for', 'me']);
+      const words = q.split(/\s+/).filter((w) => w.length > 2 && !stopWords.has(w));
+      for (const w of words) {
+        matchedProduct = allProducts.find((p) => p.name.toLowerCase().includes(w) || p.brand.toLowerCase().includes(w)) || null;
+        if (matchedProduct) break;
+      }
     }
 
-    if (matchedProduct) {
-      const cart = await executeProposeCart({
-        items: [{ productId: matchedProduct.id, quantity }],
-      });
-
-      console.log(`⏱️ [TIMING: SMART_PARSER_ORDER] Order proposal created in ${(performance.now() - t0).toFixed(1)}ms`);
+    if (!matchedProduct) {
       return {
-        response: `🛒 I have prepared an order proposal for **${quantity}x ${matchedProduct.name}** at **₹${((matchedProduct.price * quantity) / 100).toLocaleString('en-IN')}**.\n\nPlease review your items below and click **"Approve & Pay with Razorpay"** to complete your checkout!`,
-        cart,
-        categoryFilter: matchedProduct.category,
+        response: `Which product would you like to order? Please tell me the specific product name so I can prepare the exact order for you.`,
+        cart: null,
+        categoryFilter: null,
         history: [],
       };
     }
+
+    const cart = await executeProposeCart({
+      items: [{ productId: matchedProduct.id, quantity }],
+    });
+
+    console.log(`⏱️ [TIMING: SMART_PARSER_ORDER] Order proposal created in ${(performance.now() - t0).toFixed(1)}ms`);
+    return {
+      response: `🛒 I have prepared an order proposal for **${quantity}x ${matchedProduct.name}** at **₹${((matchedProduct.price * quantity) / 100).toLocaleString('en-IN')}**.\n\nPlease review your items below and click **"Approve & Pay with Razorpay"** to complete your checkout!`,
+      cart,
+      categoryFilter: matchedProduct.category,
+      history: [],
+    };
   }
 
   // 2. Handle Navigation Intent (Shoes, Audio, Wearables, etc.)

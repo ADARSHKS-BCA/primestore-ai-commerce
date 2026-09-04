@@ -27,13 +27,15 @@ export default function ProductCard({
   return (
     <div
       className="product-card"
+      onClick={() => onOpenAssistantForProduct?.(product)}
       style={isHighlighted ? {
         border: '2px solid var(--accent-cyan)',
         boxShadow: '0 0 20px rgba(6, 182, 212, 0.35), var(--shadow-lg)',
         transform: 'scale(1.02)',
         transition: 'all 0.3s ease',
         position: 'relative',
-      } : undefined}
+        cursor: 'pointer',
+      } : { cursor: 'pointer' }}
     >
       {/* Voice Selected Badge */}
       {isHighlighted && (

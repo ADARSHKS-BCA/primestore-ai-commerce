@@ -28,6 +28,7 @@ interface Message {
 
 interface FloatingAssistantProps {
   initialPrompt?: string | null;
+  activeProductId?: string | null;
   onCategoryFilterChange?: (category: string) => void;
   onSearchChange?: (query: string) => void;
   onPriceBandChange?: (band: 'all' | 'budget' | 'mid' | 'premium') => void;
@@ -39,6 +40,7 @@ interface FloatingAssistantProps {
 
 export default function FloatingAssistant({
   initialPrompt,
+  activeProductId,
   onCategoryFilterChange,
   onSearchChange,
   onPriceBandChange,
@@ -170,6 +172,19 @@ export default function FloatingAssistant({
       }
     }
   }, [isOpen, loadUserData]);
+
+  // Synchronize active selected product from storefront clicks/highlights
+  useEffect(() => {
+    if (activeProductId && voiceSessionRef.current) {
+      const p = PRODUCTS_CATALOG.find((item) => item.id === activeProductId);
+      if (p) {
+        voiceSessionRef.current.selectedProduct = p;
+        if (!voiceSessionRef.current.filteredProducts.some((x) => x.id === p.id)) {
+          voiceSessionRef.current.filteredProducts = [p, ...voiceSessionRef.current.filteredProducts];
+        }
+      }
+    }
+  }, [activeProductId]);
 
   // ── TTS Greeting on first open ──────────────────────────────
 
