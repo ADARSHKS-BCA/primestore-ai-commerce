@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getProductById, saveCart, saveOrder, updateCart } from '@/lib/dbStore';
+import { getProductById, saveCart, saveOrder } from '@/lib/dbStore';
 import { ORDER_LIMIT_PAISE, CURRENCY } from '@/lib/constants';
 import { getRazorpay } from '@/lib/razorpay';
 import { writeAuditLog } from '@/lib/auditLog';

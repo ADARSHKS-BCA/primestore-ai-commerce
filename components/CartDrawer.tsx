@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
-import { CatalogProduct } from '@/lib/productsData';
 import { openRazorpayCheckout } from '@/lib/razorpayClient';
 
 export interface CartItemData {
