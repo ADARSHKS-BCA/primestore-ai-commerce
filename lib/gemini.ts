@@ -194,16 +194,16 @@ export async function executeProposeCart(args: { items: Array<{ productId: strin
       ) || null;
 
       if (!product) {
-        // Match by name similarity
-        product = allProducts.find(
+        // Match by intelligent token scoring
+        product = matchProductFromText(rawId) || allProducts.find(
           (p) => rawId.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(rawId)
-        ) || allProducts[0];
+        ) || null;
       }
       console.log(`🔧 [FUZZY RESOLVE] ID "${item.productId}" resolved to "${product?.id}" (${product?.name})`);
     }
 
-    if (!product || !product.inStock) {
-      product = allProducts.find((p) => p.inStock) || allProducts[0];
+    if (!product) {
+      throw new Error(`Product "${item.productId}" not found in catalog.`);
     }
 
     const quantity = Math.max(1, Math.floor(item.quantity || 1));
@@ -374,7 +374,18 @@ async function runFallbackParser(userMessage: string) {
     };
   }
 
-  // 2. Handle Navigation Intent (Shoes, Audio, Wearables, etc.)
+  // 2. Handle Direct Specific Product Query
+  const directProduct = matchProductFromText(userMessage);
+  if (directProduct && !isExplicitOrder) {
+    return {
+      response: `I found the **${directProduct.name}** by **${directProduct.brand}** for **₹${directProduct.displayPrice.toLocaleString('en-IN')}**.\n\n${directProduct.description}\n• **Key Specs**: ${directProduct.specs.slice(0, 3).join(', ')}\n• **Rating**: ⭐ ${directProduct.rating} / 5 (${directProduct.reviewsCount.toLocaleString('en-IN')} reviews)\n\n👉 *Say "Order ${directProduct.name}" to add it to your cart, or tell me your budget to see alternatives.*`,
+      cart: null,
+      categoryFilter: directProduct.category,
+      history: [],
+    };
+  }
+
+  // 3. Handle Navigation Intent (Shoes, Audio, Wearables, etc.)
   if (isShoesQuery) {
     const shoes = allProducts.filter((p) => p.category === 'Footwear');
     return {

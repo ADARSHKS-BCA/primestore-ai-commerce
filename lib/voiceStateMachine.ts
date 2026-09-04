@@ -293,24 +293,34 @@ function resolveProductFromIntent(session: VoiceSession, intent: ParsedIntent): 
     if (p) return p;
   }
 
-  // 2. Intelligent token matching from raw utterance
-  if (intent.slots.rawText) {
-    const p = matchProductFromText(intent.slots.rawText, session.filteredProducts);
-    if (p) return p;
-  }
-
-  // 3. Match from parsed product name
+  // 2. Parsed product name
   if (intent.slots.productName) {
     const p = matchProductFromText(intent.slots.productName, session.filteredProducts);
     if (p) return p;
   }
 
-  // 4. Fallback to active product in session
+  // 3. Intelligent token matching from raw utterance
+  if (intent.slots.rawText) {
+    const p = matchProductFromText(intent.slots.rawText, session.filteredProducts);
+    if (p) return p;
+  }
+
+  // 4. Ordinal / Index selection
+  const targetIdx = intent.slots.productIndex !== undefined
+    ? intent.slots.productIndex
+    : intent.slots.itemIndex !== undefined
+    ? intent.slots.itemIndex - 1
+    : undefined;
+  if (targetIdx !== undefined && targetIdx >= 0 && session.filteredProducts.length > targetIdx) {
+    return session.filteredProducts[targetIdx];
+  }
+
+  // 5. Fallback to active product in session
   if (session.selectedProduct) {
     return session.selectedProduct;
   }
 
-  // 5. If exactly 1 product is on screen, choose that one
+  // 6. If exactly 1 product is on screen, choose that one
   if (session.filteredProducts && session.filteredProducts.length === 1) {
     return session.filteredProducts[0];
   }
@@ -319,6 +329,11 @@ function resolveProductFromIntent(session: VoiceSession, intent: ParsedIntent): 
 }
 
 function handleOpenState(session: VoiceSession, intent: ParsedIntent): StateTransitionResult {
+  // Handle direct product selection first
+  if (intent.type === 'select_product') {
+    return handleProductSelection(session, intent);
+  }
+
   if (intent.type === 'navigate_category' && intent.slots.category) {
     return navigateToCategory(session, intent.slots.category, intent.slots.brand || null);
   }
@@ -351,6 +366,25 @@ function handleOpenState(session: VoiceSession, intent: ParsedIntent): StateTran
     if (product) {
       session.selectedProduct = product;
       return promptUpsellOrCart(session, product);
+    }
+    return {
+      newState: 'greeting',
+      botResponse: `Which product would you like to order? You can say the name of any product like "Nike Air Max" or "boAt Earbuds".`,
+      filteredProducts: [],
+      selectedProduct: null,
+      categoryFilter: null,
+      priceBandFilter: null,
+      requiresLLM: false,
+      requiresApiCall: false,
+      apiAction: null,
+      apiPayload: null,
+    };
+  }
+
+  if (intent.type === 'ask_review' || intent.type === 'get_review') {
+    const product = resolveProductFromIntent(session, intent);
+    if (product) {
+      return presentReview(session, product);
     }
   }
 
@@ -535,12 +569,23 @@ function handleProductDetailState(session: VoiceSession, intent: ParsedIntent): 
   const product = session.selectedProduct;
   if (!product) return handleShowResultsState(session, intent);
 
+  if (intent.type === 'select_product') {
+    return handleProductSelection(session, intent);
+  }
+
   if (intent.type === 'order_it' || intent.type === 'confirm_yes') {
-    return promptUpsellOrCart(session, product);
+    const targetProduct = resolveProductFromIntent(session, intent) || product;
+    if (targetProduct) {
+      session.selectedProduct = targetProduct;
+      return promptUpsellOrCart(session, targetProduct);
+    }
   }
 
   if (intent.type === 'get_review' || intent.type === 'ask_review') {
-    return presentReview(session, product);
+    const targetProduct = resolveProductFromIntent(session, intent) || product;
+    if (targetProduct) {
+      return presentReview(session, targetProduct);
+    }
   }
 
   if (intent.type === 'go_back' || intent.type === 'confirm_no') {
@@ -571,8 +616,16 @@ function handleReviewState(session: VoiceSession, intent: ParsedIntent): StateTr
   const product = session.selectedProduct;
   if (!product) return handleShowResultsState(session, intent);
 
+  if (intent.type === 'select_product') {
+    return handleProductSelection(session, intent);
+  }
+
   if (intent.type === 'order_it' || intent.type === 'confirm_yes') {
-    return promptUpsellOrCart(session, product);
+    const targetProduct = resolveProductFromIntent(session, intent) || product;
+    if (targetProduct) {
+      session.selectedProduct = targetProduct;
+      return promptUpsellOrCart(session, targetProduct);
+    }
   }
 
   if (intent.type === 'go_back' || intent.type === 'confirm_no') {
@@ -1141,25 +1194,25 @@ function handleProductSelection(session: VoiceSession, intent: ParsedIntent): St
 
   if (targetIdx !== undefined && targetIdx >= 0 && session.filteredProducts.length > targetIdx) {
     product = session.filteredProducts[targetIdx];
-  } else if (intent.slots.productId) {
-    product = PRODUCTS_CATALOG.find((p) => p.id === intent.slots.productId) || null;
-  } else if (session.filteredProducts.length > 0) {
-    product = session.filteredProducts[0];
+  } else {
+    product = resolveProductFromIntent(session, intent);
   }
 
   if (!product) {
-    return fallbackPrompt(session, `I couldn't find that item. Please say the product number like "number 1" or the name.`);
+    return fallbackPrompt(session, `I couldn't find that item. Please say the product name like "Nike Air Max" or "boAt Earbuds".`);
   }
 
   session.selectedProduct = product;
+  session.category = product.category;
   session.state = 'product_detail';
+  session.filteredProducts = [product, ...session.filteredProducts.filter((p) => p.id !== product.id)];
 
   return {
     newState: 'product_detail',
     botResponse: `Selected ${product.name} by ${product.brand} for ₹${product.displayPrice.toLocaleString('en-IN')}. ${product.description} Say "order it" to checkout or "what's the review" to hear customer ratings.`,
     filteredProducts: session.filteredProducts,
     selectedProduct: product,
-    categoryFilter: session.category,
+    categoryFilter: product.category,
     priceBandFilter: null,
     requiresLLM: false,
     requiresApiCall: false,

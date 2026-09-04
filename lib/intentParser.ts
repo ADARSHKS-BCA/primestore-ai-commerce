@@ -52,8 +52,8 @@ export interface ParsedIntent {
 // ─── Category Mapping ─────────────────────────────────────────────
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  Audio: ['audio', 'earbud', 'earbuds', 'headphone', 'headphones', 'earphone', 'earphones', 'speaker', 'speakers', 'music'],
-  Footwear: ['shoe', 'shoes', 'footwear', 'sneaker', 'sneakers', 'running shoe', 'running shoes', 'boot', 'boots'],
+  Audio: ['audio', 'earbud', 'earbuds', 'headphone', 'headphones', 'earphone', 'earphones', 'speaker', 'speakers', 'music', 'airpods', 'airpod'],
+  Footwear: ['shoe', 'shoes', 'footwear', 'sneaker', 'sneakers', 'running shoe', 'running shoes', 'boot', 'boots', 'slides', 'sandals'],
   Wearables: ['watch', 'watches', 'smartwatch', 'smartwatches', 'wearable', 'wearables', 'fitness band', 'tracker'],
   Peripherals: ['keyboard', 'keyboards', 'mouse', 'mice', 'peripheral', 'peripherals', 'typing'],
   Storage: ['ssd', 'drive', 'drives', 'storage', 'pendrive', 'pen drive', 'flash drive', 'hard disk', 'hard drive'],
@@ -120,28 +120,27 @@ export function parseIntent(utterance: string): ParsedIntent {
     slots: { rawText: raw },
   };
 
-  // ── Greeting ────────────────────────────────────────────────
+  if (!raw) return base;
+
+  // ── 1. Greeting ─────────────────────────────────────────────
   if (/^(hi|hello|hey|good morning|good evening|good afternoon|namaste)\b/i.test(q)) {
     return { ...base, type: 'greeting', confidence: 0.9 };
   }
 
-  // ── Help ────────────────────────────────────────────────────
+  // ── 2. Help ─────────────────────────────────────────────────
   if (/^(help|what can you do|how does this work|options)\b/i.test(q)) {
     return { ...base, type: 'help', confidence: 0.9 };
   }
 
-  // ── Confirm Yes ─────────────────────────────────────────────
+  // ── 3. Confirm Yes ──────────────────────────────────────────
   if (/^(yes|yeah|yep|yup|sure|okay|ok|confirm|correct|that's right|go ahead|proceed|do it|place it|place the order)\b/i.test(q)) {
     return { ...base, type: 'confirm_yes', confidence: 0.95 };
   }
 
-  // ── Confirm No / Go Back ────────────────────────────────────
+  // ── 4. Confirm No / Go Back ─────────────────────────────────
   if (/^(no|nah|nope|cancel|never mind|go back|back|change|wait|stop|wrong)\b/i.test(q)) {
-    // Distinguish "no, show me Nike" (correction with new intent) from plain "no"
-    // Check if there's a brand or category correction embedded
     const afterNo = q.replace(/^(no|nah|nope|not that|wrong|change|go back|back)[,.]?\s*/i, '').trim();
     if (afterNo.length > 2) {
-      // Re-parse the correction
       const correctionIntent = parseIntent(afterNo);
       if (correctionIntent.type !== 'unrecognized') {
         return { ...correctionIntent, confidence: correctionIntent.confidence * 0.9 };
@@ -153,42 +152,7 @@ export function parseIntent(utterance: string): ParsedIntent {
     return { ...base, type: 'confirm_no', confidence: 0.9 };
   }
 
-  // ── Order / Buy ─────────────────────────────────────────────
-  if (/\b(order it|order this|order that|buy it|buy this|buy that|add to cart|add it|purchase|checkout|place order)\b/i.test(q)) {
-    // Try to extract product reference
-    const product = matchProductFromText(q);
-    return {
-      ...base,
-      type: 'order_it',
-      confidence: 0.95,
-      slots: {
-        rawText: raw,
-        productName: product?.name,
-        productId: product?.id,
-      },
-    };
-  }
-
-  // Explicit "order [product name]" pattern
-  const orderMatch = q.match(/^(?:order|buy|get|i want|i'll take|give me)\s+(?:the\s+|a\s+|an\s+)?(.+)/i);
-  if (orderMatch) {
-    const productText = orderMatch[1].trim();
-    const product = matchProductFromText(productText);
-    if (product) {
-      return {
-        ...base,
-        type: 'order_it',
-        confidence: 0.9,
-        slots: {
-          rawText: raw,
-          productName: product.name,
-          productId: product.id,
-        },
-      };
-    }
-  }
-
-  // ── Ask Review ──────────────────────────────────────────────
+  // ── 5. Review / Rating Query ────────────────────────────────
   if (/\b(review|reviews|rating|ratings|how good|is it good|worth it|recommend|feedback|what do people think|what's the review)\b/i.test(q)) {
     const product = matchProductFromText(q);
     return {
@@ -203,7 +167,76 @@ export function parseIntent(utterance: string): ParsedIntent {
     };
   }
 
-  // ── Show Cheaper / More Expensive ───────────────────────────
+  // ── 6. Explicit Single-Phrase Order ─────────────────────────
+  if (/^(?:order it|order this|order that|buy it|buy this|buy that|add to cart|add it|purchase|checkout|place order)$/i.test(q.trim())) {
+    const product = matchProductFromText(q);
+    return {
+      ...base,
+      type: 'order_it',
+      confidence: 0.95,
+      slots: {
+        rawText: raw,
+        productName: product?.name,
+        productId: product?.id,
+      },
+    };
+  }
+
+  // ── 7. Check if a SPECIFIC Product is Mentioned (High Priority) ───
+  const matchedProduct = matchProductFromText(q);
+  const isOrderVerb = /\b(order|buy|purchase|checkout|add to cart|add it|get me|i want to buy|i want to order|i'll take|take the)\b/i.test(q);
+
+  if (matchedProduct) {
+    if (isOrderVerb) {
+      return {
+        ...base,
+        type: 'order_it',
+        confidence: 0.95,
+        slots: {
+          rawText: raw,
+          productName: matchedProduct.name,
+          productId: matchedProduct.id,
+        },
+      };
+    } else {
+      return {
+        ...base,
+        type: 'select_product',
+        confidence: 0.9,
+        slots: {
+          rawText: raw,
+          productName: matchedProduct.name,
+          productId: matchedProduct.id,
+        },
+      };
+    }
+  }
+
+  // ── 8. Ordinal Selection (e.g. "first one", "number 2", "the 3rd option") ───
+  const numMatch = q.match(/^(?:the\s+)?(?:number\s+|option\s+|#)?(\d+)(?:st|nd|rd|th)?(?:\s+one)?$/i) ||
+    q.match(/(?:show me|select|pick|choose)\s+(?:the\s+)?(?:number\s+|option\s+|#)?(\d+)/i) ||
+    q.match(/(?:the\s+)?(?:first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th)\s+(?:one|option|product)?/i);
+  if (numMatch) {
+    const ordinalMap: Record<string, number> = {
+      first: 1, '1st': 1, second: 2, '2nd': 2, third: 3, '3rd': 3,
+      fourth: 4, '4th': 4, fifth: 5, '5th': 5,
+    };
+    let idx: number;
+    if (numMatch[1]) {
+      idx = parseInt(numMatch[1], 10);
+    } else {
+      const word = q.match(/(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th)/i)?.[1]?.toLowerCase() || '';
+      idx = ordinalMap[word] || 1;
+    }
+    return {
+      ...base,
+      type: 'select_product',
+      confidence: 0.85,
+      slots: { rawText: raw, productIndex: idx - 1 },
+    };
+  }
+
+  // ── 9. Price Filters ─────────────────────────────────────────
   if (/\b(cheaper|less expensive|lower price|budget|affordable|under|below)\b/i.test(q)) {
     const priceMatch = q.match(/(?:under|below|less than|within)\s*(?:₹|rupees?|rs\.?|inr)?\s*(\d[\d,]*)/i);
     if (priceMatch) {
@@ -232,7 +265,6 @@ export function parseIntent(utterance: string): ParsedIntent {
     return { ...base, type: 'show_expensive', confidence: 0.85 };
   }
 
-  // ── Price Range (explicit) ──────────────────────────────────
   const rangeMatch = q.match(/(?:₹|rupees?|rs\.?|inr)?\s*(\d[\d,]*)\s*(?:to|-|–)\s*(?:₹|rupees?|rs\.?|inr)?\s*(\d[\d,]*)/i);
   if (rangeMatch) {
     return {
@@ -260,7 +292,7 @@ export function parseIntent(utterance: string): ParsedIntent {
     };
   }
 
-  // ── Set Address ─────────────────────────────────────────────
+  // ── 10. Set Address ──────────────────────────────────────────
   if (/\b(deliver to|ship to|send to|address is|my address|office|home)\b/i.test(q)) {
     const addrMatch = q.match(/(?:deliver to|ship to|send to|address is)\s+(.+)/i);
     return {
@@ -274,34 +306,9 @@ export function parseIntent(utterance: string): ParsedIntent {
     };
   }
 
-  // ── Select Product (by number) ──────────────────────────────
-  const numMatch = q.match(/^(?:the\s+)?(?:number\s+|option\s+|#)?(\d+)(?:st|nd|rd|th)?(?:\s+one)?$/i) ||
-    q.match(/(?:show me|select|pick|choose)\s+(?:the\s+)?(?:number\s+|option\s+|#)?(\d+)/i) ||
-    q.match(/(?:the\s+)?(?:first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th)\s+(?:one|option|product)?/i);
-  if (numMatch) {
-    const ordinalMap: Record<string, number> = {
-      first: 1, '1st': 1, second: 2, '2nd': 2, third: 3, '3rd': 3,
-      fourth: 4, '4th': 4, fifth: 5, '5th': 5,
-    };
-    let idx: number;
-    if (numMatch[1]) {
-      idx = parseInt(numMatch[1], 10);
-    } else {
-      const word = q.match(/(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th)/i)?.[1]?.toLowerCase() || '';
-      idx = ordinalMap[word] || 1;
-    }
-    return {
-      ...base,
-      type: 'select_product',
-      confidence: 0.85,
-      slots: { rawText: raw, productIndex: idx - 1 },
-    };
-  }
-
-  // ── Brand ───────────────────────────────────────────────────
+  // ── 11. Brand Filter ─────────────────────────────────────────
   for (const [keyword, brand] of Object.entries(BRAND_KEYWORDS)) {
     if (q.includes(keyword)) {
-      // Check if there's also a category
       let category: string | undefined;
       for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
         if (keywords.some((k) => q.includes(k))) {
@@ -318,7 +325,7 @@ export function parseIntent(utterance: string): ParsedIntent {
     }
   }
 
-  // ── Category Navigation ─────────────────────────────────────
+  // ── 12. Category Navigation ──────────────────────────────────
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (keywords.some((k) => q.includes(k))) {
       return {
@@ -330,18 +337,7 @@ export function parseIntent(utterance: string): ParsedIntent {
     }
   }
 
-  // ── Product name match ──────────────────────────────────────
-  const product = matchProductFromText(q);
-  if (product) {
-    return {
-      ...base,
-      type: 'select_product',
-      confidence: 0.7,
-      slots: { rawText: raw, productName: product.name, productId: product.id },
-    };
-  }
-
-  // ── Unrecognized — forward to LLM ──────────────────────────
+  // ── 13. Fallback / Unrecognized — forward to LLM ─────────────
   return base;
 }
 
@@ -356,14 +352,16 @@ export function matchProductFromText(text: string, currentFilteredProducts?: Cat
   if (byId) return byId;
 
   // 2. Exact full Name match
-  const byExactName = PRODUCTS_CATALOG.find((p) => q.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(q));
+  const byExactName = PRODUCTS_CATALOG.find((p) => p.name.toLowerCase() === q);
   if (byExactName) return byExactName;
 
   // 3. Tokenize query and remove generic stop words
   const stopWords = new Set([
     'i', 'want', 'to', 'buy', 'order', 'get', 'the', 'a', 'an', 'please',
     'for', 'me', 'this', 'that', 'item', 'product', 'from', 'with', 'and',
-    'show', 'give', 'tell', 'about', 'is', 'it', 'can', 'you', 'my'
+    'show', 'give', 'tell', 'about', 'is', 'it', 'can', 'you', 'my', 'find',
+    'looking', 'need', 'would', 'like', 'some', 'any', 'pair', 'unit', 'units',
+    'good', 'best', 'view', 'check', 'have', 'there', 'what', 'which', 'one'
   ]);
 
   const queryTokens = q
@@ -372,6 +370,18 @@ export function matchProductFromText(text: string, currentFilteredProducts?: Cat
     .filter((w) => w.length > 1 && !stopWords.has(w));
 
   if (queryTokens.length === 0) return null;
+
+  // Check if query is ONLY broad category or brand keywords (e.g. "shoes", "nike", "audio", "smartwatches")
+  const isOnlyCategoryOrBrand = queryTokens.every((token) => {
+    const isBrand = Object.keys(BRAND_KEYWORDS).includes(token);
+    const isCat = Object.values(CATEGORY_KEYWORDS).some((kws) => kws.includes(token));
+    return isBrand || isCat;
+  });
+
+  // If query is ONLY "shoes", "nike", "headphones", "audio", "shoes nike", it's a category/brand search, not a specific product match
+  if (isOnlyCategoryOrBrand && queryTokens.length <= 2) {
+    return null;
+  }
 
   let bestScore = 0;
   let bestProduct: CatalogProduct | null = null;
@@ -385,32 +395,41 @@ export function matchProductFromText(text: string, currentFilteredProducts?: Cat
     const specsLower = product.specs.join(' ').toLowerCase();
 
     let matchedTokenCount = 0;
+    let hasDistinctiveMatch = false;
 
     for (const token of queryTokens) {
       if (nameLower.includes(token)) {
-        score += 30;
+        score += 35;
         matchedTokenCount++;
+        // If token is in product name and NOT just brand/category, it's distinctive (e.g. "air", "max", "pegasus", "bassheads", "smashic")
+        if (!brandLower.includes(token) && !categoryLower.includes(token)) {
+          hasDistinctiveMatch = true;
+          score += 20;
+        }
       } else if (brandLower === token || brandLower.includes(token)) {
-        score += 25;
+        score += 20;
         matchedTokenCount++;
       } else if (specsLower.includes(token)) {
         score += 15;
         matchedTokenCount++;
       } else if (descLower.includes(token)) {
         score += 10;
-      } else if (categoryLower.includes(token)) {
-        score += 5;
       }
     }
 
     // Boost if multiple tokens matched
     if (matchedTokenCount >= 2) {
-      score += matchedTokenCount * 20;
+      score += matchedTokenCount * 25;
     }
 
     // Boost if product is in currently filtered list on screen
     if (currentFilteredProducts && currentFilteredProducts.some((p) => p.id === product.id)) {
-      score += 10;
+      score += 15;
+    }
+
+    // Boost if distinctive model token matched
+    if (hasDistinctiveMatch) {
+      score += 25;
     }
 
     if (score > bestScore) {
@@ -419,8 +438,8 @@ export function matchProductFromText(text: string, currentFilteredProducts?: Cat
     }
   }
 
-  // Minimum confidence threshold of 25 to avoid false positives
-  if (bestScore >= 25 && bestProduct) {
+  // Minimum score threshold of 35 to ensure high precision
+  if (bestScore >= 35 && bestProduct) {
     return bestProduct;
   }
 
