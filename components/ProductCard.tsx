@@ -13,6 +13,7 @@ interface ProductCardProps {
 export default function ProductCard({
   product,
   onAddToCart,
+  onOpenAssistantForProduct,
   isHighlighted,
 }: ProductCardProps) {
   const [added, setAdded] = useState(false);
