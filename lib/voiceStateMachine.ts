@@ -286,32 +286,6 @@ export function processUserInput(session: VoiceSession, userText: string): State
 
 // ─── State Handlers ───────────────────────────────────────────────
 
-function handleOpenState(session: VoiceSession, intent: ParsedIntent): StateTransitionResult {
-  if (intent.type === 'navigate_category' && intent.slots.category) {
-    return navigateToCategory(session, intent.slots.category, intent.slots.brand || null);
-  }
-
-  if (intent.type === 'set_brand' && intent.slots.brand) {
-    const category = inferCategoryFromBrand(intent.slots.brand);
-    if (category) {
-      return navigateToCategory(session, category, intent.slots.brand);
-    }
-    session.brand = intent.slots.brand;
-    session.state = 'brand';
-    const products = filterProducts(session);
-    session.filteredProducts = products;
-    return {
-      newState: 'brand',
-      botResponse: `I found ${products.length} ${intent.slots.brand} products. Which category interests you — Audio, Footwear, Wearables, Peripherals, Storage, or Gaming?`,
-      filteredProducts: products,
-      selectedProduct: null,
-      categoryFilter: null,
-      priceBandFilter: null,
-      requiresLLM: false,
-      requiresApiCall: false,
-      apiAction: null,
-      apiPayload: null,
-    };
 function resolveProductFromIntent(session: VoiceSession, intent: ParsedIntent): CatalogProduct | null {
   // 1. Explicit productId from slots
   if (intent.slots.productId) {
