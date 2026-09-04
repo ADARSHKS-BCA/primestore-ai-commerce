@@ -88,12 +88,12 @@ export default function Navbar({
 
           {/* User Account / Profile */}
           <Link href="/account" className="nav-link-btn" title="Your Account & Order History">
-            👤 Account
+            Account
           </Link>
 
           {/* Merchant Dashboard */}
           <Link href="/dashboard" className="nav-link-btn" title="Merchant Dashboard & Real-Time Audit">
-            🏪 Dashboard
+            Dashboard
           </Link>
         </div>
       </div>
@@ -108,14 +108,10 @@ export default function Navbar({
                 onClick={() => onSelectCategory(cat)}
                 className={`nav-pill ${selectedCategory === cat ? 'active' : ''}`}
               >
-                {cat === 'All Categories' ? '⚡ All Deals' : cat}
+                {cat === 'All Categories' ? 'All Deals' : cat}
               </button>
             ))}
           </div>
-
-          <span style={{ fontSize: '0.8rem', color: 'var(--accent-gold)', fontWeight: 700 }}>
-            🔥 Mega Tech & Lifestyle Sale — Free Instant Delivery
-          </span>
         </div>
       </div>
     </nav>

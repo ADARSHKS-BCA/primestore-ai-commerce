@@ -42,7 +42,7 @@ export default function ChatInterface({
     {
       role: 'assistant',
       content:
-        '👋 Welcome! I am your AI Shopping Copilot.\n\nYou can ask me for product recommendations or directly command me to order items like:\n• "Order 2 Wireless Earbuds Pro"\n• "I want to buy the RGB Mechanical Keyboard"\n• "Find the best portable SSD and build a cart"',
+        'Welcome! I am your AI Shopping Copilot.\n\nYou can ask me for product recommendations or directly command me to order items like:\n• "Order 2 Wireless Earbuds Pro"\n• "I want to buy the RGB Mechanical Keyboard"\n• "Find the best portable SSD and build a cart"',
     },
   ]);
   const [input, setInput] = useState('');
@@ -74,12 +74,20 @@ export default function ChatInterface({
       setLoading(true);
 
       try {
-        console.log(`🤖 [UI Chat] Sending to AI: "${userMessage}"`);
+        const savedUser = typeof window !== 'undefined' ? localStorage.getItem('primestore_user') : null;
+        let userId: string | undefined = undefined;
+        if (savedUser) {
+          try {
+            userId = JSON.parse(savedUser).id;
+          } catch {}
+        }
+
         const res = await fetch('/api/agent/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: userMessage,
+            userId: userId,
             conversationHistory,
           }),
         });
@@ -87,11 +95,9 @@ export default function ChatInterface({
         const data = await res.json();
 
         if (!res.ok) {
-          console.error('❌ [UI Chat] Error response:', data);
+          console.error('[UI Chat] Error response:', data);
           throw new Error(data.error || 'Failed to get response');
         }
-
-        console.log('✅ [UI Chat] Received response:', data);
 
         setMessages((prev) => [
           ...prev,
@@ -106,12 +112,12 @@ export default function ChatInterface({
           setConversationHistory(data.history);
         }
       } catch (error) {
-        console.error('❌ [UI Chat] Request failed:', error);
+        console.error('[UI Chat] Request failed:', error);
         setMessages((prev) => [
           ...prev,
           {
             role: 'assistant',
-            content: `⚠️ Error: ${error instanceof Error ? error.message : 'Something went wrong'}`,
+            content: `Error: ${error instanceof Error ? error.message : 'Something went wrong'}`,
           },
         ]);
       } finally {
@@ -219,7 +225,7 @@ export default function ChatInterface({
 
       {/* Quick Prompts Strip */}
       <div className="chat-quick-strip">
-        <span className="quick-label">⚡ Quick:</span>
+        <span className="quick-label">Quick:</span>
         <div className="quick-scroll-wrap">
           {quickPrompts.map((prompt, idx) => (
             <button

@@ -109,7 +109,6 @@ export default function CartProposal({ cart, onPaymentSuccess, onPaymentFailure 
     <div className="modern-cart-proposal">
       <div className="proposal-header">
         <div className="proposal-title-box">
-          <span className="proposal-icon">🛒</span>
           <div>
             <h4 className="proposal-title">AI Order Proposal</h4>
             <span className="proposal-subtitle">Review items before creating order</span>
@@ -139,7 +138,7 @@ export default function CartProposal({ cart, onPaymentSuccess, onPaymentFailure 
         <span className="proposal-total-amount">₹{cart.totalDisplay.toLocaleString('en-IN')}</span>
       </div>
 
-      {error && <div className="cart-error">⚠️ {error}</div>}
+      {error && <div className="cart-error">{error}</div>}
 
       {status === 'proposed' && (
         <div className="proposal-actions">
@@ -149,7 +148,7 @@ export default function CartProposal({ cart, onPaymentSuccess, onPaymentFailure 
             disabled={loading}
             className="btn-proposal-approve"
           >
-            {loading ? '⏳ Preparing Razorpay Checkout...' : '✅ Approve & Pay with Razorpay'}
+            {loading ? 'Preparing Razorpay Checkout...' : 'Approve & Pay with Razorpay'}
           </button>
           <button
             type="button"
@@ -157,7 +156,7 @@ export default function CartProposal({ cart, onPaymentSuccess, onPaymentFailure 
             disabled={loading}
             className="btn-proposal-reject"
           >
-            {loading ? '...' : '❌ Reject'}
+            {loading ? '...' : 'Reject'}
           </button>
         </div>
       )}
@@ -166,8 +165,8 @@ export default function CartProposal({ cart, onPaymentSuccess, onPaymentFailure 
         <div className="checkout-trigger-container">
           <div className="approval-confirmed-banner" style={status === 'payment_failed' ? { borderColor: 'var(--accent-rose)', color: 'var(--accent-rose)', background: 'rgba(244, 63, 94, 0.1)' } : undefined}>
             {status === 'payment_failed'
-              ? '⚠️ Payment was interrupted or declined. Cart is saved!'
-              : `✓ Order #${orderData.orderId} is active (Razorpay: ${orderData.razorpayOrderId})`}
+              ? 'Payment was interrupted or declined. Cart is saved!'
+              : `Order #${orderData.orderId} is active (Razorpay: ${orderData.razorpayOrderId})`}
           </div>
           <button
             type="button"
@@ -175,20 +174,20 @@ export default function CartProposal({ cart, onPaymentSuccess, onPaymentFailure 
             className="btn btn-checkout"
             style={status === 'payment_failed' ? { background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' } : undefined}
           >
-            {status === 'payment_failed' ? '🔄 Retry Razorpay Payment' : '💳 Open Razorpay Checkout Modal'} (₹{(orderData.amount / 100).toLocaleString('en-IN')})
+            {status === 'payment_failed' ? 'Retry Razorpay Payment' : 'Open Razorpay Checkout Modal'} (₹{(orderData.amount / 100).toLocaleString('en-IN')})
           </button>
         </div>
       )}
 
       {status === 'checked_out' && (
         <div className="cart-success">
-          🎉 <strong>Payment Successful!</strong> Your order has been placed and verified.
+          <strong>Payment Successful!</strong> Your order has been placed and verified.
         </div>
       )}
 
       {status === 'rejected' && (
         <div className="cart-rejected">
-          ✕ Proposal was rejected. Tell the AI if you want to modify your order.
+          Proposal was rejected. Tell the AI if you want to modify your order.
         </div>
       )}
     </div>

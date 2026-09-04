@@ -6,7 +6,7 @@ export interface UserProfile {
   fullName: string;
   phone?: string;
   address?: string;
-  createdAt: string;
+  createdAt?: string;
 }
 
 export interface CustomerOrder {
@@ -28,27 +28,8 @@ export interface CustomerOrder {
 }
 
 // In-memory / local session fallback for orders
-const localOrdersStore: CustomerOrder[] = [
-  {
-    id: 'ord_demo_101',
-    userId: 'demo-user-1',
-    razorpayOrderId: 'order_TWGmfvAj077h20',
-    razorpayPaymentId: 'pay_TWH8b15dxnIQf7',
-    amount: 249900,
-    totalDisplay: 2499,
-    currency: 'INR',
-    status: 'paid',
-    items: [
-      {
-        productId: 'prod_earbuds_pro',
-        name: 'AuraPods Pro Active Noise Cancelling Earbuds',
-        price: 249900,
-        quantity: 1,
-      },
-    ],
-    createdAt: new Date().toISOString(),
-  },
-];
+const localOrdersStore: CustomerOrder[] = [];
+const localProfilesStore = new Map<string, UserProfile>();
 
 /**
  * Save customer order into Supabase
@@ -89,7 +70,7 @@ export async function getCustomerOrders(userId?: string | null): Promise<Custome
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         return data.map((d) => ({
           id: d.id,
           userId: d.user_id,
@@ -108,55 +89,83 @@ export async function getCustomerOrders(userId?: string | null): Promise<Custome
     }
   }
 
+  if (userId) {
+    return localOrdersStore.filter((o) => o.userId === userId || !o.userId);
+  }
+
   return localOrdersStore;
 }
 
-// In-memory fallback for user delivery addresses
-const localAddressStore: Record<string, string> = {
-  'demo-user-1': 'Flat 402, Sunshine Heights, Indiranagar, Bengaluru, Karnataka - 560038',
-  'user_adarsh_1': 'Flat 402, Sunshine Heights, Indiranagar, Bengaluru, Karnataka - 560038',
-};
-
 /**
- * Retrieve saved delivery address for a user
+ * Retrieve saved profile for a user
  */
-export async function getUserAddress(userId?: string | null): Promise<string | null> {
+export async function getUserProfile(userId?: string | null): Promise<UserProfile | null> {
   if (!userId) return null;
 
   if (supabaseAdmin) {
     try {
       const { data, error } = await supabaseAdmin
         .from('profiles')
-        .select('address')
+        .select('*')
         .eq('id', userId)
         .single();
 
-      if (!error && data?.address) {
-        return data.address;
+      if (!error && data) {
+        return {
+          id: data.id,
+          email: data.email || '',
+          fullName: data.full_name || data.fullName || '',
+          phone: data.phone || '',
+          address: data.address || '',
+          createdAt: data.created_at || new Date().toISOString(),
+        };
       }
     } catch (err) {
-      console.warn('⚠️ [SUPABASE STORE] Address fetch failed, using local fallback:', err);
+      console.warn('⚠️ [SUPABASE STORE] Profile fetch failed, using local fallback:', err);
     }
   }
 
-  return localAddressStore[userId] || null;
+  return localProfilesStore.get(userId) || null;
+}
+
+/**
+ * Save or update user profile
+ */
+export async function saveUserProfile(profile: UserProfile): Promise<void> {
+  localProfilesStore.set(profile.id, profile);
+
+  if (supabaseAdmin && profile.id) {
+    try {
+      await supabaseAdmin.from('profiles').upsert(
+        {
+          id: profile.id,
+          email: profile.email,
+          full_name: profile.fullName,
+          phone: profile.phone || null,
+          address: profile.address || null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+      console.log(`☁️ [SUPABASE STORE] Profile saved for user ${profile.id}`);
+    } catch (err) {
+      console.warn('⚠️ [SUPABASE STORE] Profile save failed, using local fallback:', err);
+    }
+  }
+}
+
+/**
+ * Retrieve saved delivery address for a user
+ */
+export async function getUserAddress(userId?: string | null): Promise<string | null> {
+  const profile = await getUserProfile(userId);
+  return profile?.address || null;
 }
 
 /**
  * Save or update user delivery address
  */
 export async function saveUserAddress(userId: string, address: string): Promise<void> {
-  localAddressStore[userId] = address;
-
-  if (supabaseAdmin && userId) {
-    try {
-      await supabaseAdmin
-        .from('profiles')
-        .upsert({ id: userId, address }, { onConflict: 'id' });
-      console.log(`☁️ [SUPABASE STORE] Address saved for user ${userId}`);
-    } catch (err) {
-      console.warn('⚠️ [SUPABASE STORE] Address save failed, using local fallback:', err);
-    }
-  }
+  const existing = (await getUserProfile(userId)) || { id: userId, email: '', fullName: 'Shopper' };
+  await saveUserProfile({ ...existing, address });
 }
-

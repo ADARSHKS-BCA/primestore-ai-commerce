@@ -18,41 +18,54 @@ export default function LoginPage() {
     setErrorMsg('');
 
     try {
+      // 1. First attempt Supabase Auth if configured
       if (supabase) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-      } else {
-        // Fallback local session for demo
-        localStorage.setItem(
-          'primestore_user',
-          JSON.stringify({
-            id: 'demo_user_1',
-            email: email || 'shopper@primestore.ai',
-            name: 'Demo Shopper',
-          })
-        );
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (!error && data?.user) {
+            const displayName =
+              data?.user?.user_metadata?.full_name ||
+              data?.user?.user_metadata?.name ||
+              email.split('@')[0];
+
+            const userObj = {
+              id: data.user.id,
+              email: data.user.email || email,
+              name: displayName || 'Shopper',
+            };
+            localStorage.setItem('primestore_user', JSON.stringify(userObj));
+            router.push('/');
+            return;
+          }
+        } catch (supabaseErr) {
+          console.warn('Supabase auth direct failed, falling back to server DB auth:', supabaseErr);
+        }
       }
-      router.push('/account');
+
+      // 2. Authenticate through Database API (Cloud Firestore / Supabase DB)
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Invalid credentials.');
+      }
+
+      // Store authenticated user session
+      localStorage.setItem('primestore_user', JSON.stringify(data.user));
+      router.push('/');
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Login failed');
+      setErrorMsg(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGuestLogin = () => {
-    localStorage.setItem(
-      'primestore_user',
-      JSON.stringify({
-        id: 'guest_shopper_1',
-        email: 'guest@primestore.ai',
-        name: 'Guest Shopper',
-      })
-    );
-    router.push('/account');
   };
 
   return (
@@ -65,7 +78,7 @@ export default function LoginPage() {
             </span>
           </Link>
           <h2 style={{ marginTop: '0.75rem' }}>Welcome Back</h2>
-          <p>Sign in to view your orders and personalized recommendations</p>
+          <p>Sign in to view your profile, orders, and personalized shopping recommendations</p>
         </div>
 
         {errorMsg && (
@@ -110,15 +123,7 @@ export default function LoginPage() {
           </div>
 
           <button type="submit" disabled={loading} className="btn-auth-primary">
-            {loading ? 'Signing in...' : 'Sign In to PrimeStore'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleGuestLogin}
-            className="btn-auth-guest"
-          >
-            🚀 Continue as Demo Guest
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 

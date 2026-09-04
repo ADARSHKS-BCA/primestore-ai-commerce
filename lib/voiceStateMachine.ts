@@ -132,7 +132,7 @@ export interface VoiceSession {
   startedAt: Date;
   upsellOffered: boolean;
   upsellAccepted: boolean | null;
-  upsellItem: { name: string; displayPrice: number; price: number } | null;
+  upsellItem: { id: string; name: string; displayPrice: number; price: number } | null;
   lastFailureReason: string | null;
 }
 
@@ -591,7 +591,7 @@ function handleUpsellState(session: VoiceSession, intent: ParsedIntent): StateTr
 
     const items = [
       { productId: product.id, quantity: 1 },
-      ...(upsell ? [{ productId: product.id, quantity: 1 }] : []),
+      ...(upsell?.id ? [{ productId: upsell.id, quantity: 1 }] : []),
     ];
 
     return {
@@ -970,7 +970,7 @@ function promptUpsellOrCart(session: VoiceSession, product: CatalogProduct): Sta
     const crossSell = CROSS_SELL_CATALOG.find((x) => x.matchCategories.includes(product.category));
     if (crossSell) {
       session.upsellOffered = true;
-      session.upsellItem = { name: crossSell.name, displayPrice: crossSell.displayPrice, price: crossSell.price };
+      session.upsellItem = { id: crossSell.id, name: crossSell.name, displayPrice: crossSell.displayPrice, price: crossSell.price };
       session.state = 'upsell_offer';
 
       const botResponse = `Great choice! Adding the ${product.name} (₹${product.displayPrice.toLocaleString('en-IN')}) to your order. Before checkout, would you like to add matching ${crossSell.name} for just ₹${crossSell.displayPrice}? Say "yes" to include it, or "no" to skip.`;

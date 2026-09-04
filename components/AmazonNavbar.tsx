@@ -161,13 +161,8 @@ export default function AmazonNavbar({
             className={`sub-nav-item ${selectedCategory === 'Accessories' ? 'active' : ''}`}
             onClick={() => onCategoryChange('Accessories')}
           >
-            🔌 Accessories
+            Accessories
           </button>
-        </div>
-
-        <div className="sub-nav-promo">
-          <span className="promo-tag">⚡ Mega Tech Sale</span>
-          <span className="promo-text">Up to 50% Off | Free 1-Day Prime Delivery</span>
         </div>
       </div>
     </header>

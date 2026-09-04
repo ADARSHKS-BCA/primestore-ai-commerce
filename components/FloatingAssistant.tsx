@@ -102,11 +102,11 @@ export default function FloatingAssistant({
         setMessages((prev) => [...prev, {
           id: `sys_${Date.now()}`,
           role: 'assistant',
-          content: `⚠️ ${reason}\n\nI've switched to manual mode. You can still type in AI mode or use the guided wizard.`,
+          content: `${reason}\n\nYou can type your commands in AI mode or use the Step-by-Step Manual Wizard.`,
         }]);
       },
       onError: (error) => {
-        console.error('[FloatingAssistant] Voice error:', error);
+        console.warn('[FloatingAssistant] Voice event:', error);
       },
     });
 
@@ -120,7 +120,8 @@ export default function FloatingAssistant({
 
   // ── Initialize User & Session ───────────────────────────────
 
-  useEffect(() => {
+  const loadUserData = useCallback(() => {
+    if (typeof window === 'undefined') return { name: 'Shopper', userId: null };
     const savedUser = localStorage.getItem('primestore_user');
     let name = 'Shopper';
     let userId: string | null = null;
@@ -133,6 +134,11 @@ export default function FloatingAssistant({
         // use default
       }
     }
+    return { name, userId };
+  }, []);
+
+  useEffect(() => {
+    const { name, userId } = loadUserData();
     setUserName(name);
 
     // Create voice session
@@ -144,14 +150,26 @@ export default function FloatingAssistant({
       {
         id: 'welcome',
         role: 'assistant',
-        content: `👋 **Welcome, ${name}! What would you like to order today?**\n\nI can help you find products, update the page, and place your order — all by voice!\n• *"I want to buy running shoes"*\n• *"Find Sony ANC headphones under ₹20,000"*\n• *"Show me mechanical keyboards"*\n• *"Order AuraPods Pro"*\n\n🎙️ **Tap the mic button to speak, or type below.**`,
+        content: `**Welcome, ${name}! What would you like to order today?**\n\nI can help you find products, update the page, and place your order — all by voice!\n• *"I want to buy running shoes"*\n• *"Find Sony ANC headphones under ₹20,000"*\n• *"Show me mechanical keyboards"*\n• *"Order AuraPods Pro"*\n\n**Tap the mic button to speak, or type below.**`,
       },
     ]);
 
     // Dismiss speech bubble after 10 seconds if unopened
     const timer = setTimeout(() => setShowSpeechBubble(false), 12000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loadUserData]);
+
+  // Refresh user data when assistant opens
+  useEffect(() => {
+    if (isOpen) {
+      const { name, userId } = loadUserData();
+      setUserName(name);
+      if (voiceSessionRef.current) {
+        voiceSessionRef.current.userName = name;
+        if (userId) voiceSessionRef.current.userId = userId;
+      }
+    }
+  }, [isOpen, loadUserData]);
 
   // ── TTS Greeting on first open ──────────────────────────────
 
@@ -198,11 +216,20 @@ export default function FloatingAssistant({
       if (result.requiresApiCall && result.apiAction) {
         if (result.apiAction === 'propose_cart' && result.apiPayload) {
           try {
+            const savedUser = localStorage.getItem('primestore_user');
+            let userId: string | undefined = undefined;
+            if (savedUser) {
+              try {
+                userId = JSON.parse(savedUser).id;
+              } catch {}
+            }
             const res = await fetch('/api/agent/chat', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 message: `Order ${result.selectedProduct?.name || 'the selected product'}`,
+                items: result.apiPayload.items,
+                userId: userId,
                 conversationHistory: [],
               }),
             });
@@ -364,11 +391,20 @@ export default function FloatingAssistant({
           }
 
           try {
+            const savedUser = localStorage.getItem('primestore_user');
+            let userId: string | undefined = undefined;
+            if (savedUser) {
+              try {
+                userId = JSON.parse(savedUser).id;
+              } catch {}
+            }
+
             const res = await fetch('/api/agent/chat', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 message: query,
+                userId: userId,
                 conversationHistory: messages.slice(-4),
               }),
             });
@@ -394,7 +430,7 @@ export default function FloatingAssistant({
               {
                 id: `err_${Date.now()}`,
                 role: 'assistant',
-                content: '⚠️ Unable to process request. Please try again or switch to Manual Order mode!',
+                content: 'Unable to process request. Please try again or switch to Manual Order mode.',
               },
             ]);
           }
@@ -467,11 +503,21 @@ export default function FloatingAssistant({
     setManualCreatingCart(true);
     setManualSelectedProduct(product);
     try {
+      const savedUser = localStorage.getItem('primestore_user');
+      let userId: string | undefined = undefined;
+      if (savedUser) {
+        try {
+          userId = JSON.parse(savedUser).id;
+        } catch {}
+      }
+
       const res = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: `Order ${manualQuantity > 1 ? `${manualQuantity} ` : ''}${product.name}`,
+          items: [{ productId: product.id, quantity: manualQuantity }],
+          userId: userId,
           conversationHistory: [],
         }),
       });
@@ -536,7 +582,7 @@ export default function FloatingAssistant({
             >
               ✕
             </button>
-            <strong>👋 Hi {userName}!</strong>
+            <strong>Hi {userName}!</strong>
             <div>What would you like to order today? Click me to speak or type!</div>
           </div>
         )}
@@ -617,12 +663,12 @@ export default function FloatingAssistant({
               <div>
                 <h4 style={{ fontSize: '0.95rem', margin: 0 }}>PrimeStore Voice Companion</h4>
                 <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>
-                  {isSpeaking ? '🔊 Speaking...' : isListening ? '🎙️ Listening...' : `Ready to assist ${userName}`}
+                  {isSpeaking ? 'Speaking...' : isListening ? 'Listening...' : `Ready to assist ${userName}`}
                 </span>
               </div>
             </div>
 
-            {/* Mode Switcher: 🤖 AI Mode vs 🛠️ Manual Wizard */}
+            {/* Mode Switcher: Voice AI vs Manual Wizard */}
             <div style={{ display: 'flex', background: 'var(--bg-input)', padding: '2px', borderRadius: '9999px', border: '1px solid var(--border-color)' }}>
               <button
                 onClick={() => setActiveTab('ai')}
@@ -637,7 +683,7 @@ export default function FloatingAssistant({
                   color: activeTab === 'ai' ? '#ffffff' : 'var(--text-secondary)',
                 }}
               >
-                🎙️ Voice AI
+                Voice AI
               </button>
               <button
                 onClick={() => setActiveTab('manual')}
@@ -652,7 +698,7 @@ export default function FloatingAssistant({
                   color: activeTab === 'manual' ? '#000000' : 'var(--text-secondary)',
                 }}
               >
-                🛠️ Manual
+                Manual
               </button>
             </div>
 
@@ -662,7 +708,7 @@ export default function FloatingAssistant({
           </div>
 
           {/* ========================================================
-              TAB 1: 🎙️ Voice AI Conversational Assistant
+              TAB 1: Voice AI Conversational Assistant
               ======================================================== */}
           {activeTab === 'ai' && (
             <>
@@ -680,8 +726,8 @@ export default function FloatingAssistant({
                 }}>
                   <span>State: <strong style={{ color: 'var(--accent-cyan)' }}>{voiceSessionRef.current.state}</strong></span>
                   <span>
-                    {voiceSessionRef.current.category && `📦 ${voiceSessionRef.current.category}`}
-                    {voiceSessionRef.current.brand && ` • 🏷️ ${voiceSessionRef.current.brand}`}
+                    {voiceSessionRef.current.category && `${voiceSessionRef.current.category}`}
+                    {voiceSessionRef.current.brand && ` • ${voiceSessionRef.current.brand}`}
                   </span>
                 </div>
               )}
@@ -689,16 +735,16 @@ export default function FloatingAssistant({
               {/* Quick Requirement Chips */}
               <div className="copilot-quick-chips">
                 <button onClick={() => handleVoiceInput('I want to buy shoes')} className="quick-chip-btn">
-                  👟 Shoes
+                  Shoes
                 </button>
                 <button onClick={() => handleVoiceInput('Show Sony headphones')} className="quick-chip-btn">
-                  🎧 Sony Audio
+                  Sony Audio
                 </button>
                 <button onClick={() => handleVoiceInput('Show smartwatches under ₹5,000')} className="quick-chip-btn">
-                  ⌚ Watches &lt; ₹5k
+                  Watches &lt; ₹5k
                 </button>
                 <button onClick={() => handleVoiceInput('Order 1 AuraPods Pro')} className="quick-chip-btn">
-                  ⚡ Order Earbuds
+                  Order Earbuds
                 </button>
               </div>
 
@@ -728,7 +774,7 @@ export default function FloatingAssistant({
 
                 {loading && (
                   <div className="chat-bubble chat-bubble-ai" style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>
-                    ✨ Robot is checking the store and updating the page...
+                    Robot is checking the store and updating the page...
                   </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -783,7 +829,7 @@ export default function FloatingAssistant({
           )}
 
           {/* ========================================================
-              TAB 2: 🛠️ Manual Guided Shopping & Order Wizard
+              TAB 2: Manual Guided Shopping & Order Wizard
               ======================================================== */}
           {activeTab === 'manual' && (
             <div style={{ flex: 1, padding: '1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -804,7 +850,7 @@ export default function FloatingAssistant({
               {wizardStep === 1 && (
                 <div>
                   <h4 style={{ fontSize: '0.95rem', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
-                    📦 Step 1: What category would you like to explore?
+                    Step 1: What category would you like to explore?
                   </h4>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.85rem' }}>
                     Selecting a category will automatically navigate and update the storefront behind this window.
@@ -838,7 +884,7 @@ export default function FloatingAssistant({
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <h4 style={{ fontSize: '0.95rem', margin: 0, color: 'var(--text-primary)' }}>
-                      💰 Step 2: Choose your Budget Band
+                      Step 2: Choose your Budget Band
                     </h4>
                     <button
                       onClick={() => setWizardStep(1)}
@@ -853,10 +899,10 @@ export default function FloatingAssistant({
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     {([
-                      { band: 'all' as const, label: '⭐ All Price Bands (Full Selection)' },
-                      { band: 'budget' as const, label: '🏷️ Budget Pick (Under ₹2,000)' },
-                      { band: 'mid' as const, label: '⚡ Mid-Range Best Value (₹2,000 – ₹8,000)' },
-                      { band: 'premium' as const, label: '💎 Flagship & Premium (Over ₹8,000)' },
+                      { band: 'all' as const, label: 'All Price Bands (Full Selection)' },
+                      { band: 'budget' as const, label: 'Budget Pick (Under ₹2,000)' },
+                      { band: 'mid' as const, label: 'Mid-Range Best Value (₹2,000 – ₹8,000)' },
+                      { band: 'premium' as const, label: 'Flagship & Premium (Over ₹8,000)' },
                     ]).map(({ band, label }) => (
                       <button
                         key={band}
@@ -885,7 +931,7 @@ export default function FloatingAssistant({
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <h4 style={{ fontSize: '0.95rem', margin: 0, color: 'var(--text-primary)' }}>
-                      🛒 Step 3: Select Item &amp; Order
+                      Step 3: Select Item &amp; Order
                     </h4>
                     <button
                       onClick={() => {
@@ -968,7 +1014,7 @@ export default function FloatingAssistant({
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          {manualCreatingCart && manualSelectedProduct?.id === prod.id ? 'Creating...' : '⚡ Place Order'}
+                          {manualCreatingCart && manualSelectedProduct?.id === prod.id ? 'Creating...' : 'Place Order'}
                         </button>
                       </div>
                     ))}
@@ -978,7 +1024,7 @@ export default function FloatingAssistant({
                   {manualProposedCart && (
                     <div style={{ marginTop: '1rem' }}>
                       <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#10b981', marginBottom: '0.4rem' }}>
-                        ✓ Order proposal created for {manualQuantity}x {manualSelectedProduct?.name}:
+                        Order proposal created for {manualQuantity}x {manualSelectedProduct?.name}:
                       </div>
                       <CartProposal cart={manualProposedCart} onPaymentSuccess={handlePaymentSuccess} />
                     </div>

@@ -9,27 +9,48 @@ import { CustomerOrder } from '@/lib/supabaseStore';
 export default function AccountPage() {
   const router = useRouter();
   const [user, setUser] = useState<{ id: string; email: string; name: string } | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSavedMsg, setProfileSavedMsg] = useState(false);
 
   useEffect(() => {
-    // Check user session
     const savedUser = localStorage.getItem('primestore_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    } else {
-      // Default demo guest session if none
-      const defaultUser = {
-        id: 'user_adarsh_1',
-        email: 'adarsh@primestore.ai',
-        name: 'Adarsh Kumar (Prime Member)',
-      };
-      setUser(defaultUser);
-      localStorage.setItem('primestore_user', JSON.stringify(defaultUser));
+    if (!savedUser) {
+      router.replace('/auth/login');
+      return;
     }
 
-    // Fetch user order history
-    fetch('/api/orders/user')
+    let currentUser: { id: string; email: string; name: string };
+    try {
+      currentUser = JSON.parse(savedUser);
+    } catch {
+      router.replace('/auth/login');
+      return;
+    }
+
+    setUser(currentUser);
+    setFullName(currentUser.name || '');
+    setEmail(currentUser.email || '');
+
+    // Fetch user profile from Supabase
+    fetch(`/api/user/profile?userId=${encodeURIComponent(currentUser.id)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.profile) {
+          if (data.profile.fullName) setFullName(data.profile.fullName);
+          if (data.profile.phone) setPhone(data.profile.phone);
+          if (data.profile.address) setAddress(data.profile.address);
+        }
+      })
+      .catch((err) => console.warn('Profile fetch error:', err));
+
+    // Fetch user order history from Supabase / Firestore
+    fetch(`/api/orders/user?userId=${encodeURIComponent(currentUser.id)}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.orders) {
@@ -39,6 +60,42 @@ export default function AccountPage() {
       .catch((err) => console.warn('Failed to load orders:', err))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setSavingProfile(true);
+    setProfileSavedMsg(false);
+
+    const updatedUser = {
+      ...user,
+      name: fullName.trim() || 'Shopper',
+      email: email.trim(),
+    };
+
+    try {
+      await fetch('/api/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: user.id,
+          email: updatedUser.email,
+          fullName: updatedUser.name,
+          phone,
+          address,
+        }),
+      });
+
+      localStorage.setItem('primestore_user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      setProfileSavedMsg(true);
+      setTimeout(() => setProfileSavedMsg(false), 3500);
+    } catch (err) {
+      console.error('Failed to save profile:', err);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('primestore_user');
@@ -58,21 +115,21 @@ export default function AccountPage() {
           <div className="navbar-actions">
             <ThemeToggle />
             <Link href="/" className="nav-link-btn">
-              🛍️ Storefront
+              Storefront
             </Link>
             <Link href="/dashboard" className="nav-link-btn">
-              🏪 Dashboard
+              Dashboard
             </Link>
             <button onClick={handleLogout} className="nav-link-btn" style={{ color: 'var(--accent-rose)' }}>
-              🚪 Log Out
+              Log Out
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Account Dashboard */}
-      <main className="account-dashboard-page">
-        {/* User Profile Banner */}
+      <main className="account-dashboard-page" style={{ maxWidth: '1000px', margin: '2rem auto', padding: '0 1.5rem' }}>
+        {/* User Profile Overview */}
         <div
           style={{
             background: 'linear-gradient(135deg, var(--bg-card), var(--bg-secondary))',
@@ -102,14 +159,14 @@ export default function AccountPage() {
                 fontWeight: 800,
               }}
             >
-              {user?.name?.[0] || 'U'}
+              {user?.name?.[0]?.toUpperCase() || 'U'}
             </div>
             <div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {user?.name || 'Valued Prime Customer'}
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                {user?.name || 'Shopper'}
               </h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                {user?.email || 'customer@primestore.ai'} • ⚡ Verified Shopper
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '4px 0 0' }}>
+                {user?.email || 'customer@primestore.ai'}
               </p>
             </div>
           </div>
@@ -119,7 +176,7 @@ export default function AccountPage() {
               style={{
                 background: 'var(--bg-input)',
                 border: '1px solid var(--border-color)',
-                padding: '0.6rem 1rem',
+                padding: '0.6rem 1.25rem',
                 borderRadius: 'var(--radius-md)',
                 textAlign: 'center',
               }}
@@ -127,37 +184,117 @@ export default function AccountPage() {
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
                 Total Orders
               </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-gold)' }}>
+              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--accent-gold)' }}>
                 {orders.length}
-              </div>
-            </div>
-            <div
-              style={{
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border-color)',
-                padding: '0.6rem 1rem',
-                borderRadius: 'var(--radius-md)',
-                textAlign: 'center',
-              }}
-            >
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                Membership
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981' }}>
-                Prime VIP
               </div>
             </div>
           </div>
         </div>
 
-        {/* Section Header */}
-        <div className="account-header">
-          <div>
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              📦 Order &amp; Payment History
+        {/* Profile Edit Form */}
+        <div
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-xl)',
+            padding: '2rem',
+            marginBottom: '2.5rem',
+          }}
+        >
+          <div style={{ marginBottom: '1.25rem' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+              Profile Details
             </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-              Real-time records backed by Supabase &amp; Razorpay Test Mode
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0' }}>
+              Update your contact info and default delivery address used for voice checkout.
+            </p>
+          </div>
+
+          {profileSavedMsg && (
+            <div
+              style={{
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid #10b981',
+                color: '#10b981',
+                padding: '0.75rem 1rem',
+                borderRadius: 'var(--radius-md)',
+                marginBottom: '1.25rem',
+                fontSize: '0.88rem',
+                fontWeight: 700,
+              }}
+            >
+              Profile successfully updated!
+            </div>
+          )}
+
+          <form onSubmit={handleSaveProfile}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+              <div className="auth-form-group">
+                <label className="auth-label">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="auth-input"
+                  placeholder="Enter your full name"
+                />
+              </div>
+
+              <div className="auth-form-group">
+                <label className="auth-label">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="auth-input"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div className="auth-form-group">
+                <label className="auth-label">Phone Number</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="auth-input"
+                  placeholder="9876543210"
+                />
+              </div>
+
+              <div className="auth-form-group">
+                <label className="auth-label">Delivery Address</label>
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="auth-input"
+                  placeholder="Flat / House No, Street, City, State - PIN"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="btn-auth-primary"
+              style={{ width: 'auto', padding: '0.65rem 1.75rem', cursor: 'pointer' }}
+            >
+              {savingProfile ? 'Saving...' : 'Save Profile Changes'}
+            </button>
+          </form>
+        </div>
+
+        {/* Section Header */}
+        <div className="account-header" style={{ marginBottom: '1rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+              Order & Payment History
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0' }}>
+              Real-time records for your account backed by Supabase & Razorpay Test Mode.
             </p>
           </div>
         </div>
@@ -171,16 +308,15 @@ export default function AccountPage() {
           <div
             style={{
               textAlign: 'center',
-              padding: '4rem 2rem',
+              padding: '3.5rem 2rem',
               background: 'var(--bg-card)',
               borderRadius: 'var(--radius-lg)',
               border: '1px solid var(--border-color)',
             }}
           >
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛍️</div>
-            <h4>No orders placed yet</h4>
-            <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-              Use our AI Shopping Copilot on the storefront to make your first purchase!
+            <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>No orders placed yet</h4>
+            <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem', fontSize: '0.88rem' }}>
+              Use our AI Shopping Copilot on the storefront to place your first order.
             </p>
             <Link
               href="/"
@@ -191,7 +327,7 @@ export default function AccountPage() {
             </Link>
           </div>
         ) : (
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {orders.map((order) => (
               <div key={order.id} className="order-history-card">
                 <div className="order-card-top">
@@ -201,7 +337,7 @@ export default function AccountPage() {
                     </div>
                     {order.razorpayPaymentId && (
                       <div style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 600, marginTop: '2px' }}>
-                        💳 Razorpay ID: {order.razorpayPaymentId}
+                        Razorpay ID: {order.razorpayPaymentId}
                       </div>
                     )}
                   </div>
@@ -219,7 +355,7 @@ export default function AccountPage() {
                         border: `1px solid ${order.status === 'paid' ? '#10b981' : '#f59e0b'}`,
                       }}
                     >
-                      ● {order.status}
+                      {order.status}
                     </span>
                     <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                       ₹{order.totalDisplay.toLocaleString('en-IN')}
@@ -228,7 +364,7 @@ export default function AccountPage() {
                 </div>
 
                 {/* Item Details */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
                   {order.items.map((item, idx) => (
                     <div
                       key={idx}

@@ -16,6 +16,7 @@ export default function ProductCard({
   isHighlighted,
 }: ProductCardProps) {
   const [added, setAdded] = useState(false);
+  const [imgSrc, setImgSrc] = useState(product.imageUrl);
 
   const handleAdd = () => {
     setAdded(true);
@@ -49,17 +50,20 @@ export default function ProductCard({
           color: '#000',
           animation: 'pulse-glow 2s infinite',
         }}>
-          🎙️ Voice Selected
+          Voice Selected
         </div>
       )}
       {/* Product Image & Badges */}
       <div className="card-image-box">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={product.imageUrl}
+          src={imgSrc || product.imageUrl}
           alt={product.name}
           className="card-img"
           loading="lazy"
+          onError={() => {
+            setImgSrc('https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80');
+          }}
         />
 
         {product.badge && (
@@ -88,7 +92,7 @@ export default function ProductCard({
         <div className="card-specs">
           {product.specs.slice(0, 3).map((spec, i) => (
             <span key={i} className="spec-chip">
-              ✓ {spec}
+              {spec}
             </span>
           ))}
         </div>
@@ -106,7 +110,7 @@ export default function ProductCard({
           onClick={handleAdd}
           className="btn-add-cart"
         >
-          {added ? '✓ Added to Cart!' : '🛒 Add to Cart'}
+          {added ? 'Added to Cart' : 'Add to Cart'}
         </button>
       </div>
     </div>

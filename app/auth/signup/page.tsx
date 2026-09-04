@@ -19,29 +19,39 @@ export default function SignupPage() {
     setErrorMsg('');
 
     try {
+      // 1. Try direct Supabase signup if configured
       if (supabase) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { full_name: fullName },
-          },
-        });
-        if (error) throw error;
-      } else {
-        // Local fallback
-        localStorage.setItem(
-          'primestore_user',
-          JSON.stringify({
-            id: `user_${Date.now()}`,
+        try {
+          await supabase.auth.signUp({
             email,
-            name: fullName || 'New Shopper',
-          })
-        );
+            password,
+            options: {
+              data: { full_name: fullName },
+            },
+          });
+        } catch (supabaseErr) {
+          console.warn('Supabase direct signup warning:', supabaseErr);
+        }
       }
-      router.push('/account');
+
+      // 2. Register User in Database (Cloud Firestore & Supabase)
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, fullName }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create account.');
+      }
+
+      // Store authenticated user session
+      localStorage.setItem('primestore_user', JSON.stringify(data.user));
+      router.push('/');
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Signup failed');
+      setErrorMsg(err instanceof Error ? err.message : 'Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -82,7 +92,7 @@ export default function SignupPage() {
             <input
               type="text"
               required
-              placeholder="Adarsh Kumar"
+              placeholder="Enter your name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               className="auth-input"
@@ -114,7 +124,7 @@ export default function SignupPage() {
           </div>
 
           <button type="submit" disabled={loading} className="btn-auth-primary">
-            {loading ? 'Creating Account...' : 'Create PrimeStore Account'}
+            {loading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
 

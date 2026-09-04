@@ -103,9 +103,24 @@ export class VoiceEngine {
     };
 
     recognition.onerror = (event: { error: string }) => {
-      console.warn('[VoiceEngine] STT error:', event.error);
+      console.warn('[VoiceEngine] STT event:', event.error);
+
+      if (event.error === 'network') {
+        this._isListening = false;
+        this.events.onListeningChange(false);
+        this.events.onFallbackToText('Voice recognition network is currently offline or unreachable. Switched to text typing.');
+        return;
+      }
+
+      if (event.error === 'aborted') {
+        this._isListening = false;
+        this.events.onListeningChange(false);
+        return;
+      }
 
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        this._isListening = false;
+        this.events.onListeningChange(false);
         this.events.onFallbackToText('Microphone permission denied. Switching to text mode.');
         return;
       }
@@ -113,18 +128,20 @@ export class VoiceEngine {
       if (event.error === 'no-speech') {
         this.noSpeechCount++;
         if (this.noSpeechCount >= 3) {
-          this.events.onFallbackToText('No speech detected repeatedly. You can type instead.');
+          this.events.onFallbackToText('No speech detected. You can type or click below.');
           this.noSpeechCount = 0;
         }
         return;
       }
 
       if (event.error === 'audio-capture') {
-        this.events.onFallbackToText('Microphone unavailable or noisy environment. Switching to text mode.');
+        this._isListening = false;
+        this.events.onListeningChange(false);
+        this.events.onFallbackToText('Microphone unavailable. Switching to text mode.');
         return;
       }
 
-      this.events.onError(`Speech recognition error: ${event.error}`);
+      this.events.onError(`Voice event: ${event.error}`);
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {

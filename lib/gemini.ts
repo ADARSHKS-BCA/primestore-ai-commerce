@@ -168,7 +168,7 @@ async function executeSearchProducts(args: { query?: string; category?: string }
   return products;
 }
 
-async function executeProposeCart(args: { items: Array<{ productId: string; quantity: number }> }): Promise<Cart> {
+export async function executeProposeCart(args: { items: Array<{ productId: string; quantity: number }>; userId?: string }): Promise<Cart> {
   const t0 = performance.now();
   console.log('🛒 [TOOL: propose_cart] Assembling cart proposal with items:', args.items);
   const cartItems: CartItem[] = [];
@@ -187,6 +187,8 @@ async function executeProposeCart(args: { items: Array<{ productId: string; quan
           p.id.toLowerCase() === rawId ||
           rawId.includes(p.id.toLowerCase()) ||
           p.id.toLowerCase().includes(rawId.replace(/_100|_pro|_v2|_v4/g, '')) ||
+          p.name.toLowerCase().includes(rawId) ||
+          rawId.includes(p.name.toLowerCase()) ||
           rawId.includes(p.brand.toLowerCase())
       ) || null;
 
@@ -196,7 +198,7 @@ async function executeProposeCart(args: { items: Array<{ productId: string; quan
           (p) => rawId.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(rawId)
         ) || allProducts[0];
       }
-      console.log(`🔧 [FUZZY RESOLVE] Hallucinated ID "${item.productId}" auto-resolved to "${product?.id}" (${product?.name})`);
+      console.log(`🔧 [FUZZY RESOLVE] ID "${item.productId}" resolved to "${product?.id}" (${product?.name})`);
     }
 
     if (!product || !product.inStock) {
@@ -221,11 +223,11 @@ async function executeProposeCart(args: { items: Array<{ productId: string; quan
     totalDisplay: totalPaise / 100,
     status: 'proposed',
     createdAt: new Date(),
-    userId: undefined,
+    userId: args.userId || undefined,
   };
 
   await saveCart(cart);
-  console.log(`✨ [TOOL: propose_cart] Cart ID ${cart.id} (₹${cart.totalDisplay}) created in ${(performance.now() - t0).toFixed(1)}ms`);
+  console.log(`✨ [TOOL: propose_cart] Cart ID ${cart.id} (${cart.items.map(i => i.name).join(', ')}) created in ${(performance.now() - t0).toFixed(1)}ms`);
 
   // Non-blocking audit log
   writeAuditLog({
@@ -234,9 +236,11 @@ async function executeProposeCart(args: { items: Array<{ productId: string; quan
     details: {
       cartId: cart.id,
       itemCount: cartItems.length,
+      items: cartItems.map(i => ({ productId: i.productId, name: i.name, quantity: i.quantity })),
       totalDisplay: cart.totalDisplay,
     },
     status: 'proposed',
+    userId: args.userId || undefined,
     relatedCartId: cart.id,
   }).catch(() => {});
 

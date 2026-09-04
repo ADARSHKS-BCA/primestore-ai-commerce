@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import HeroShowcase from '@/components/HeroShowcase';
 import ProductGrid from '@/components/ProductGrid';
@@ -8,6 +9,8 @@ import FloatingAssistant from '@/components/FloatingAssistant';
 import { PRODUCTS_CATALOG, CatalogProduct } from '@/lib/productsData';
 
 export default function Home() {
+  const router = useRouter();
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [products, setProducts] = useState<CatalogProduct[]>(PRODUCTS_CATALOG);
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
   const [selectedPriceBand, setSelectedPriceBand] = useState<'all' | 'budget' | 'mid' | 'premium'>('all');
@@ -16,6 +19,18 @@ export default function Home() {
   const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
+
+  // Ensure user is logged in before viewing storefront
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('primestore_user');
+      if (!savedUser) {
+        router.replace('/auth/login');
+        return;
+      }
+      setCheckingAuth(false);
+    }
+  }, [router]);
 
   // Fetch live products from Cloud Firestore (with in-memory catalog fallback)
   useEffect(() => {
@@ -43,7 +58,7 @@ export default function Home() {
   };
 
   const handleAddToCart = (product: CatalogProduct) => {
-    showToast(`🛒 Added ${product.name} to your Cart!`);
+    showToast(`Added ${product.name} to your Cart`);
   };
 
   const handleOpenAssistantWithPrompt = (prompt: string) => {
@@ -55,6 +70,19 @@ export default function Home() {
   const handleProductSelect = useCallback((productId: string | null) => {
     setHighlightedProductId(productId);
   }, []);
+
+  if (checkingAuth) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+            prime<span style={{ color: 'var(--accent-gold)' }}>store</span>
+          </div>
+          <div>Loading PrimeStore...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
