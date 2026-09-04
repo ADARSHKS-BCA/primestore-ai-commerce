@@ -61,10 +61,8 @@ export async function POST(request: Request) {
       items: cartItems,
       totalPaise,
       totalDisplay: totalPaise / 100,
-      currency: CURRENCY,
       status: 'approved',
-      proposedAt: now,
-      approvedAt: now,
+      createdAt: now,
       userId: userId || undefined,
     };
 
